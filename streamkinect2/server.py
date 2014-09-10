@@ -59,6 +59,8 @@ class Server(object):
 
     """
     def __init__(self, address=None, port=None, start_immediately=True, name=None):
+        self.is_running = False
+
         # Choose a unique name if none is specified
         if name is None:
             name = 'Kinect2 {0}'.format(uuid.uuid4())
@@ -79,7 +81,6 @@ class Server(object):
         self.address = address
         self.port = port
         self.endpoint = 'tcp://{0}:{1}'.format(address, port)
-        self.is_running = False
 
         properties = { 'endpoint': self.endpoint, }
 
