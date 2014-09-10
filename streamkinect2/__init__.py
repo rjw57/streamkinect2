@@ -49,9 +49,13 @@ class Server(object):
 
         The port bound to.
 
-    .. py:attributes:: endpoint
+    .. py:attribute:: endpoint
 
         The zeromq endpoint address for this server.
+
+    .. py:attribute:: is_running
+
+        *True* when the server is running, *False* otherwise.
 
     """
     def __init__(self, address=None, port=None, start_immediately=True, name=None):
@@ -64,11 +68,11 @@ class Server(object):
 
         # Create a zeromq socket
         ctx = zmq.Context.instance()
-        s = ctx.socket(zmq.PUB)
+        self._socket = ctx.socket(zmq.PUB)
         if port is None:
-            port = s.bind_to_random_port('tcp://{0}'.format(address))
+            port = self._socket.bind_to_random_port('tcp://{0}'.format(address))
         else:
-            s.bind('tcp://{0}:{1}'.format(address, port))
+            self._socket.bind('tcp://{0}:{1}'.format(address, port))
 
         # Set public attributes
         self.name = name
@@ -87,15 +91,30 @@ class Server(object):
         if start_immediately:
             self.start()
 
+    def __del__(self):
+        if self.is_running:
+            self.stop()
+
     def start(self):
         # register ourselves with zeroconf
         log.info('Registering server "{0}" with Zeroconf'.format(self.name))
         _ZC.registerService(self._zc_info)
 
+        self.is_running = True
+
     def stop(self):
+        if self._socket.closed:
+            log.error('Server already stopped')
+            return
+
         # unregister ourselves with zeroconf
         log.info('Unregistering server "{0}" with Zeroconf'.format(self.name))
         _ZC.unregisterService(self._zc_info)
+
+        # close the socket
+        self._socket.close()
+
+        self.is_running = False
 
 class _ZeroconfListener(object):
     def __init__(self, listener):
