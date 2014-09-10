@@ -21,15 +21,21 @@ _ZC_SERVICE_TYPE = '_kinect2._tcp.local.'
 # Global logging object
 log = getLogger(__name__)
 
-ServerInfo = namedtuple('ServerInfo', ['name', 'endpoint'])
-ServerInfo.__doc__ = """Kinect2 Stream server information.
+class ServerInfo(namedtuple('ServerInfo', ['name', 'endpoint'])):
+    """Kinect2 Stream server information.
 
-This is a subclass of the bultin :py:class:`tuple` class with named accessors
-for convenience. The tuple holds *name*, *endpoint* pairs. The *name* is the
-server-provided human-readable name for the server. The *endpoint* contains
-connection information which should be passed to
-:py:class:`streamkinect2.client.Client`.
-"""
+    This is a subclass of the bultin :py:class:`tuple` class with named accessors
+    for convenience. The tuple holds *name*, *endpoint* pairs.
+
+    .. py:attribute:: name
+
+        A server-provided human-readable name for the server.
+
+    .. py:attribute:: endpoint
+
+        Connection information which should be passed to
+        :py:class:`streamkinect2.client.Client`.
+    """
 
 class Server(object):
     """A server capable of streaming Kinect2 data to interested clients.
