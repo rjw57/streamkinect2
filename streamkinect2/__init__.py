@@ -196,3 +196,10 @@ class ServerBrowser(object):
                 listener.remove_server(info)
             except KeyError: # pragma: no cover
                 log.warn('Ignoring server which we know nothing about')
+
+class Client(object):
+    def __init__(self, endpoint):
+        self.endpoint = endpoint
+
+    def ping(self):
+        pass
