@@ -133,9 +133,9 @@ class ServerBrowser(object):
 
         # A browser. Note the use of a weak reference to us.
         self._browser = zeroconf.ServiceBrowser(_ZC, _ZC_SERVICE_TYPE,
-                ServerBrowser.Listener(weakref.ref(self)))
+                ServerBrowser._Listener(weakref.ref(self)))
 
-    class Listener(object):
+    class _Listener(object):
         """Listen for ZeroConf service announcements. The browser object is
         kept as a weak reference so that we don't end up with circular references.
 
