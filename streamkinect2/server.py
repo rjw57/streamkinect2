@@ -130,7 +130,7 @@ class ServerBrowser(object):
     continue to receive notification of servers, you should keep it around.
 
     *listener* is an object which should have two methods which both take a
-    single py:class`ServerInfo` instance as their only argument. The methods
+    single :py:class`ServerInfo` instance as their only argument. The methods
     should be called :py:meth:`add_server` and :py:meth:`remove_server` and,
     unsurprisingly, will be called when servers are added and removed from the
     network.
