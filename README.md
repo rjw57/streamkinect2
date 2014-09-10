@@ -13,6 +13,20 @@ in Windows but the rest of my pipeline is Linux based.
 * Transparently compresses depth data to reduce bandwidth utilisation.
 * Uses [ZeroMQ](http://zeromq.org/) as a high-performance portable transport.
 * Tested (using a mock device) with an aim for >95% code coverage.
+* Supports Python 2.7 and Python 3.3.
+
+## Installation
+
+For the moment, until the software is usable, it should be installed directly
+from git:
+
+```console
+$ pip install git+https://github.com/rjw57/streamkinect2
+```
+
+Under Windows, it is highly recommended that one installs the [Anaconda
+installer](http://continuum.io/downloads) to get an easy, and up-to-date,
+Python installation.
 
 ## Licence
 
