@@ -6,6 +6,7 @@ from logging import getLogger
 import json
 import socket
 import uuid
+import weakref
 
 import zeroconf
 import zmq
@@ -131,48 +132,67 @@ class ServerBrowser(object):
     def __init__(self, listener):
         self.listener = listener
 
-        # A browser. Note the use of a weak reference to us
-        self._browser = zeroconf.ServiceBrowser(_ZC, _ZC_SERVICE_TYPE, self)
+        # A browser. Note the use of a weak reference to us.
+        self._browser = zeroconf.ServiceBrowser(_ZC, _ZC_SERVICE_TYPE,
+                ServerBrowser.Listener(weakref.ref(self)))
 
-        # List of ServerInfo records keyed by FQDN
-        self._servers = { }
+    class Listener(object):
+        """Listen for ZeroConf service announcements. The browser object is
+        kept as a weak reference so that we don't end up with circular references.
 
-    def addService(self, zeroconf, type, name):
-        # Skip types we don't know about
-        if type != _ZC_SERVICE_TYPE:
-            return  # pragma: no cover
-        assert name.endswith('.' + _ZC_SERVICE_TYPE)
+        """
+        def __init__(self, browser_ref):
+            self.browser_ref = browser_ref
 
-        log.info('Service discovered: {0}'.format(name))
-        short_name = name[:-(len(_ZC_SERVICE_TYPE)+1)]
+            # List of ServerInfo records keyed by FQDN
+            self._servers = { }
 
-        zc_info = zeroconf.getServiceInfo(type, name)
-        address = socket.inet_ntoa(zc_info.getAddress())
-        port = zc_info.getPort()
+        def addService(self, zeroconf, type, name):
+            browser = self.browser_ref()
+            if browser is None:
+                return
+            listener = browser.listener
 
-        # Use endpoint from server if possible
-        try:
-            props = json.loads(zc_info.getText().decode('utf8'))
-            endpoint = props['endpoint']
-        except (ValueError, KeyError):
-            log.warn('Server did not specify an endpoint. Guessing a sensible value.')
-            endpoint = 'tcp://{0}:{1}'.format(address, port)
+            # Skip types we don't know about
+            if type != _ZC_SERVICE_TYPE:
+                return  # pragma: no cover
+            assert name.endswith('.' + _ZC_SERVICE_TYPE)
 
-        info = ServerInfo(name=short_name, endpoint=props['endpoint'])
+            log.info('Service discovered: {0}'.format(name))
+            short_name = name[:-(len(_ZC_SERVICE_TYPE)+1)]
 
-        self._servers[name] = info
-        self.listener.add_server(info)
+            zc_info = zeroconf.getServiceInfo(type, name)
+            address = socket.inet_ntoa(zc_info.getAddress())
+            port = zc_info.getPort()
 
-    def removeService(self, zeroconf, type, name):
-        # Skip types we don't know about
-        if type != _ZC_SERVICE_TYPE:
-            return  # pragma: no cover
+            # Use endpoint from server if possible
+            try:
+                props = json.loads(zc_info.getText().decode('utf8'))
+                endpoint = props['endpoint']
+            except (ValueError, KeyError):
+                log.warn('Server did not specify an endpoint. Guessing a sensible value.')
+                endpoint = 'tcp://{0}:{1}'.format(address, port)
 
-        log.info('Service removed: {0}'.format(name))
+            info = ServerInfo(name=short_name, endpoint=props['endpoint'])
 
-        try:
-            info = self._servers[name]
-            del self._servers[name]
-            self.listener.remove_server(info)
-        except KeyError: # pragma: no cover
-            log.warn('Ignoring server which we know nothing about')
+            self._servers[name] = info
+            listener.add_server(info)
+
+        def removeService(self, zeroconf, type, name):
+            browser = self.browser_ref()
+            if browser is None:
+                return
+            listener = browser.listener
+
+            # Skip types we don't know about
+            if type != _ZC_SERVICE_TYPE:
+                return  # pragma: no cover
+
+            log.info('Service removed: {0}'.format(name))
+
+            try:
+                info = self._servers[name]
+                del self._servers[name]
+                listener.remove_server(info)
+            except KeyError: # pragma: no cover
+                log.warn('Ignoring server which we know nothing about')
