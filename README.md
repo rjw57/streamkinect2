@@ -1,6 +1,7 @@
 # Network streaming of Kinect v2 data
 
 [![Build Status](https://travis-ci.org/rjw57/streamkinect2.svg?branch=master)](https://travis-ci.org/rjw57/streamkinect2)
+[![Documentation Status](https://readthedocs.org/projects/streamkinect2/badge/?version=latest)](https://readthedocs.org/projects/streamkinect2/?badge=latest)
 
 This project is an *experiment* in streaming data from the Kinect 2 sensor to
 another host on the network. I need it since the Kinect 2 SDK is only supported
