@@ -51,7 +51,7 @@ def wait_for_server_remove(listener, name, timeout=2):
 
 def test_discovery_before_creation():
     listener = TestListener()
-    browser = streamkinect2.new_server_browser(listener)
+    browser = streamkinect2.ServerBrowser(listener)
 
     server = streamkinect2.Server()
     log.info('Created server "{0}"'.format(server.name))
@@ -72,7 +72,7 @@ def test_discovery_after_creation():
     log.info('Created server "{0}"'.format(server.name))
 
     listener = TestListener()
-    browser = streamkinect2.new_server_browser(listener)
+    browser = streamkinect2.ServerBrowser(listener)
 
     assert wait_for_server_add(listener, server.name)
 

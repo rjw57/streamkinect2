@@ -116,9 +116,23 @@ class Server(object):
 
         self.is_running = False
 
-class _ZeroconfListener(object):
+class ServerBrowser(object):
+    """An object which listens for kinect2 streaming servers on the network.
+    The object will keep listening as long as it is alive and so if you want to
+    continue to receive notification of servers, you should keep it around.
+
+    *listener* is an object which should have two methods which both take a
+    single py:class`ServerInfo` instance as their only argument. The methods
+    should be called :py:meth:`add_server` and :py:meth:`remove_server` and,
+    unsurprisingly, will be called when servers are added and removed from the
+    network.
+
+    """
     def __init__(self, listener):
         self.listener = listener
+
+        # A browser. Note the use of a weak reference to us
+        self._browser = zeroconf.ServiceBrowser(_ZC, _ZC_SERVICE_TYPE, self)
 
         # List of ServerInfo records keyed by FQDN
         self._servers = { }
@@ -162,18 +176,3 @@ class _ZeroconfListener(object):
             self.listener.remove_server(info)
         except KeyError: # pragma: no cover
             log.warn('Ignoring server which we know nothing about')
-
-def new_server_browser(listener):
-    """Create a new browser object which listens for kinect2 streaming servers
-    on the network. The object will keep listening as long as it is alive and
-    so if you want to continue to receive notification of servers, you should
-    keep the return value from this function around.
-
-    *listener* is an object which should have two methods which both take a
-    single py:class`ServerInfo` instance as their only argument. The methods
-    should be called :py:meth:`add_server` and :py:meth:`remove_server` and,
-    unsurprisingly, will be called when servers are added and removed from the
-    network.
-
-    """
-    return zeroconf.ServiceBrowser(_ZC, _ZC_SERVICE_TYPE, _ZeroconfListener(listener))
