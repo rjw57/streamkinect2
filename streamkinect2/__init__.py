@@ -2,12 +2,13 @@
 """
 
 from collections import namedtuple
-import json
 from logging import getLogger
+import json
 import socket
 import uuid
 
 import zeroconf
+import zmq
 
 # Version metadata
 from .version import *
@@ -33,24 +34,54 @@ connection information which should be passed to :py:class:`Client`.
 class Server(object):
     """A server capable of streaming Kinect2 data to interested clients.
 
+    *address* and *port* are the bind address (as a decimal-dotted IP address)
+    and port from which to start serving. If *port* is None, a random port is
+    chosen. If *address* is '*None* then attempt to infer a sensible default.
+
     *name* should be some human-readable string describing the server. If
     *None* then a sensible default name is used.
 
+    .. py:attribute:: address
+
+        The address bound to as a decimal-dotted string.
+
+    .. py:attribute:: port
+
+        The port bound to.
+
+    .. py:attributes:: endpoint
+
+        The zeromq endpoint address for this server.
+
     """
-    def __init__(self, start_immediately=True, name=None):
+    def __init__(self, address=None, port=None, start_immediately=True, name=None):
         # Choose a unique name if none is specified
         if name is None:
             name = 'Kinect2 {0}'.format(uuid.uuid4())
 
+        if address is None:
+            address = _ZC.intf # Is this a private attribute?
+
+        # Create a zeromq socket
+        ctx = zmq.Context.instance()
+        s = ctx.socket(zmq.PUB)
+        if port is None:
+            port = s.bind_to_random_port('tcp://{0}'.format(address))
+        else:
+            s.bind('tcp://{0}:{1}'.format(address, port))
+
         # Set public attributes
         self.name = name
+        self.address = address
+        self.port = port
+        self.endpoint = 'tcp://{0}:{1}'.format(address, port)
 
-        properties = { }
+        properties = { 'endpoint': self.endpoint, }
 
         # Create a Zeroconf service info for ourselves
         self._zc_info = zeroconf.ServiceInfo(_ZC_SERVICE_TYPE,
             '.'.join((self.name, _ZC_SERVICE_TYPE)),
-            socket.inet_aton("10.0.1.2"), 1234,
+            address=socket.inet_aton(self.address), port=self.port,
             properties=json.dumps(properties).encode('utf8'))
 
         if start_immediately:
@@ -67,7 +98,7 @@ class Server(object):
         _ZC.unregisterService(self._zc_info)
 
 class _ZeroconfListener(object):
-    def __init__(self, listener):   # pragma: no cover
+    def __init__(self, listener):
         self.listener = listener
 
         # List of ServerInfo records keyed by FQDN
@@ -76,20 +107,33 @@ class _ZeroconfListener(object):
     def addService(self, zeroconf, type, name):
         # Skip types we don't know about
         if type != _ZC_SERVICE_TYPE:
-            return
+            return  # pragma: no cover
         assert name.endswith('.' + _ZC_SERVICE_TYPE)
 
         log.info('Service discovered: {0}'.format(name))
         short_name = name[:-(len(_ZC_SERVICE_TYPE)+1)]
 
-        info = ServerInfo(name=short_name, endpoint='foo')
+        zc_info = zeroconf.getServiceInfo(type, name)
+        address = socket.inet_ntoa(zc_info.getAddress())
+        port = zc_info.getPort()
+
+        # Use endpoint from server if possible
+        try:
+            props = json.loads(zc_info.getText().decode('utf8'))
+            endpoint = props['endpoint']
+        except (ValueError, KeyError):
+            log.warn('Server did not specify an endpoint. Guessing a sensible value.')
+            endpoint = 'tcp://{0}:{1}'.format(address, port)
+
+        info = ServerInfo(name=short_name, endpoint=props['endpoint'])
+
         self._servers[name] = info
         self.listener.add_server(info)
 
     def removeService(self, zeroconf, type, name):
         # Skip types we don't know about
         if type != _ZC_SERVICE_TYPE:
-            return
+            return  # pragma: no cover
 
         log.info('Service removed: {0}'.format(name))
 
@@ -100,7 +144,7 @@ class _ZeroconfListener(object):
         except KeyError: # pragma: no cover
             log.warn('Ignoring server which we know nothing about')
 
-def new_server_browser(listener):   # pragma: no cover
+def new_server_browser(listener):
     """Create a new browser object which listens for kinect2 streaming servers
     on the network. The object will keep listening as long as it is alive and
     so if you want to continue to receive notification of servers, you should
