@@ -3,7 +3,7 @@ Basic server support
 """
 
 from logging import getLogger
-from streamkinect2 import Server
+from streamkinect2.server import Server
 
 log = getLogger(__name__)
 

@@ -3,7 +3,3 @@
 """
 # Version metadata
 from .version import *
-
-# Server and clients
-from .client import Client
-from .server import Server, ServerInfo, ServerBrowser

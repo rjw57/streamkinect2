@@ -2,13 +2,14 @@
 Test basic client
 """
 
-import streamkinect2
+from streamkinect2.client import Client
+from streamkinect2.server import Server
 
 class TestClient:
     def setup(self):
         # Start a server for this client
-        self.server = streamkinect2.Server()
+        self.server = Server()
 
     def test_ping(self):
-        client = streamkinect2.Client(self.server.endpoint)
+        client = Client(self.server.endpoint)
         client.ping()
