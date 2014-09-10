@@ -1,3 +1,6 @@
+"""Kinect2 streaming server and client
+"""
+
 from collections import namedtuple
 import json
 from logging import getLogger
@@ -18,19 +21,53 @@ _ZC_SERVICE_TYPE = '_kinect2._tcp.local.'
 # Global logging object
 log = getLogger(__name__)
 
-ServerInfo = namedtuple('ServiceInfo', ['name', 'endpoint'])
+ServerInfo = namedtuple('ServerInfo', ['name', 'endpoint'])
 ServerInfo.__doc__ = """Kinect2 Stream server information.
 
-.. :py:attribute:: name
-    Server-provided name
-
-.. :py:attribute:: endpoint
-    ZeroMQ endpoint for this server
-
+This is a subclass of the bultin :py:class:`tuple` class with named accessors
+for convenience. The tuple holds *name*, *endpoint* pairs. The *name* is the
+server-provided human-readable name for the server. The *endpoint* contains
+connection information which should be passed to :py:class:`Client`.
 """
 
+class Server(object):
+    """A server capable of streaming Kinect2 data to interested clients.
+
+    *name* should be some human-readable string describing the server. If
+    *None* then a sensible default name is used.
+
+    """
+    def __init__(self, start_immediately=True, name=None):
+        # Choose a unique name if none is specified
+        if name is None:
+            name = 'Kinect2 {0}'.format(uuid.uuid4())
+
+        # Set public attributes
+        self.name = name
+
+        properties = { }
+
+        # Create a Zeroconf service info for ourselves
+        self._zc_info = zeroconf.ServiceInfo(_ZC_SERVICE_TYPE,
+            '.'.join((self.name, _ZC_SERVICE_TYPE)),
+            socket.inet_aton("10.0.1.2"), 1234,
+            properties=json.dumps(properties).encode('utf8'))
+
+        if start_immediately:
+            self.start()
+
+    def start(self):
+        # register ourselves with zeroconf
+        log.info('Registering server "{0}" with Zeroconf'.format(self.name))
+        _ZC.registerService(self._zc_info)
+
+    def stop(self):
+        # unregister ourselves with zeroconf
+        log.info('Unregistering server "{0}" with Zeroconf'.format(self.name))
+        _ZC.unregisterService(self._zc_info)
+
 class _ZeroconfListener(object):
-    def __init__(self, listener):
+    def __init__(self, listener):   # pragma: no cover
         self.listener = listener
 
         # List of ServerInfo records keyed by FQDN
@@ -60,46 +97,20 @@ class _ZeroconfListener(object):
             info = self._servers[name]
             del self._servers[name]
             self.listener.remove_server(info)
-        except KeyError:
+        except KeyError: # pragma: no cover
             log.warn('Ignoring server which we know nothing about')
 
-    def _addedServer(self, name, info):
-        for l in self._listeners:
-            l.addServer(info)
+def new_server_browser(listener):   # pragma: no cover
+    """Create a new browser object which listens for kinect2 streaming servers
+    on the network. The object will keep listening as long as it is alive and
+    so if you want to continue to receive notification of servers, you should
+    keep the return value from this function around.
 
-    def _removedServer(Self, name, info):
-        for l in self._listeners:
-            l.removeServer(info)
+    *listener* is an object which should have two methods which both take a
+    single py:class`ServerInfo` instance as their only argument. The methods
+    should be called :py:meth:`add_server` and :py:meth:`remove_server` and,
+    unsurprisingly, will be called when servers are added and removed from the
+    network.
 
-def new_server_browser(listener):
+    """
     return zeroconf.ServiceBrowser(_ZC, _ZC_SERVICE_TYPE, _ZeroconfListener(listener))
-
-class Server(object):
-    def __init__(self, start_immediately=True, name=None):
-        # Choose a unique name if none is specified
-        if name is None:
-            name = 'Kinect2 {0}'.format(uuid.uuid4())
-
-        # Set public attributes
-        self.name = name
-
-        properties = { }
-
-        # Create a Zeroconf service info for ourselves
-        self._zc_info = zeroconf.ServiceInfo(_ZC_SERVICE_TYPE,
-            '.'.join((self.name, _ZC_SERVICE_TYPE)),
-            socket.inet_aton("10.0.1.2"), 1234,
-            properties=json.dumps(properties).encode('utf8'))
-
-        if start_immediately:
-            self.start()
-
-    def start(self):
-        # register ourselves with zeroconf
-        log.info('Registering server "{0}" with Zeroconf'.format(self.name))
-        _ZC.registerService(self._zc_info)
-
-    def stop(self):
-        # unregister ourselves with zeroconf
-        log.info('Unregistering server "{0}" with Zeroconf'.format(self.name))
-        _ZC.unregisterService(self._zc_info)
