@@ -40,5 +40,6 @@ setup(
 
     extras_require={
         'docs': [ 'sphinx', 'docutils', ],
+        'mock': [ 'numpy', ],
     },
 )
