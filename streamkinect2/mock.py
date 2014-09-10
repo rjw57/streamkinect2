@@ -59,7 +59,7 @@ class MockKinect(threading.Thread):
             df = np.minimum(self._wall, np.roll(self._sphere, dx, 1))
             with self._depth_listeners_lock:
                 for l in self._depth_listeners:
-                    l(df.data)
+                    l(self._frame_shape[::-1], bytes(df.data))
             now = time.time()
 
             # HACK: aim for just above 60FPS
