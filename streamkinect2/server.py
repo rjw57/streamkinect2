@@ -79,6 +79,7 @@ class Server(object):
         self.address = address
         self.port = port
         self.endpoint = 'tcp://{0}:{1}'.format(address, port)
+        self.is_running = False
 
         properties = { 'endpoint': self.endpoint, }
 
