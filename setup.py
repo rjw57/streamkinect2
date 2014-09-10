@@ -3,15 +3,17 @@
 import os
 from setuptools import setup, find_packages
 
+import streamkinect2.version as meta
+
 # Utility function to read the README file.
 def read(fname):
     return open(os.path.join(os.path.dirname(__file__), fname)).read()
 
 setup(
-    name = "streamkinect2",
-    version = "0.0.1",
-    author = "Rich Wareham",
-    author_email = "rich.streamkinect2@richwareham.com",
+    name = meta.__project__,
+    version = meta.__version__,
+    author = meta.__author__,
+    author_email = meta.__author_email__,
     description = "A simple network streamer for kinect2 data.",
     license = "BSD",
     keywords = "kinect kinect2 zeroconf bonjour",
@@ -35,4 +37,8 @@ setup(
     tests_require=[
         'coverage'
     ],
+
+    extras_require={
+        'docs': [ 'sphinx', 'docutils', ],
+    },
 )

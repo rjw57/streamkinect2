@@ -6,6 +6,9 @@ import uuid
 
 import zeroconf
 
+# Version metadata
+from .version import *
+
 # Create our global zeroconf object
 _ZC = zeroconf.Zeroconf()
 
