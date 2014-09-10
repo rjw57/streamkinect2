@@ -17,6 +17,10 @@ except:
 
 from streamkinect2.compress import DepthFrameCompresser
 
+# This is intentionally low to not be too hard on the test server. Use a
+# benchmark script if you want to get a better idea of performance.
+TARGET_FPS = 30
+
 def skip_if_no_mock(f):
     @functools.wraps(f)
     def wrapper(*args, **kwargs):
@@ -76,9 +80,9 @@ def test_getting_enough_fps():
     fps = float(count) / t
     log.info('Mock kinect gave {0} frames in {1:.2f} seconds => fps = {2:.2f}'.format(
         count, t, fps))
-    if fps < 55:
-        log.error('FPS should be > 55')
-    assert fps >= 55
+    if fps < TARGET_FPS:
+        log.error('FPS should be > {0}'.format(TARGET_FPS))
+    assert fps >= TARGET_FPS
 
 @skip_if_no_mock
 def test_getting_compressed_frames():
@@ -106,6 +110,6 @@ def test_getting_fast_enough_compression():
     fps = float(len(packets)) / t
     log.info('Mock kinect gave {0} compressed packets in {1:.2f} seconds => fps = {2:.2f}'.format(
         len(packets), t, fps))
-    if fps < 55:
-        log.error('FPS should be > 55')
-    assert fps >= 55
+    if fps < TARGET_FPS:
+        log.error('FPS should be > {0}'.format(TARGET_FPS))
+    assert fps >= TARGET_FPS
