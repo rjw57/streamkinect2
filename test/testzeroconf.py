@@ -3,42 +3,78 @@ Test ZeroConf service discovery.
 
 """
 from logging import getLogger
+from tornado.testing import AsyncTestCase
+from zmq.eventloop.ioloop import ZMQIOLoop
 from streamkinect2.server import Server, ServerBrowser
 from streamkinect2.common import EndpointType
-from .util import TestListener, wait_for_server_add, wait_for_server_remove
 
 log = getLogger(__name__)
 
-def test_discovery_before_creation():
-    listener = TestListener()
-    browser = ServerBrowser(listener)
+class TestDiscovery(AsyncTestCase):
+    class Listener(object):
+        def __init__(self):
+            self.servers = set()
 
-    with Server() as server:
-        log.info('Created server "{0}"'.format(server.name))
+        def add_server(self, info):
+            log.info('Listener told to add server: {0}'.format(info))
+            self.servers.add(info)
 
-        assert wait_for_server_add(listener, server.name)
+        def remove_server(self, info):
+            log.info('Listener told to remove server: {0}'.format(info))
+            self.servers.remove(info)
 
-        for s in listener.servers:
-            if s.name == server.name:
-                log.info('Discovered server has endpoint {0} which should be {1}'.format(
-                    s.endpoint, server.endpoints[EndpointType.control]))
-                assert s.endpoint == server.endpoints[EndpointType.control]
+    def wait_for_server_add(self, listener, name):
+        def condition():
+            for s in listener.servers:
+                if s.name == name:
+                    return True
+            return False
+        self.stop(True)
+        return self.wait(condition)
 
-    assert wait_for_server_remove(listener, server.name)
+    def wait_for_server_remove(self, listener, name):
+        def condition():
+            for s in listener.servers:
+                if s.name == name:
+                    return False
+            return True
+        self.stop(True)
+        return self.wait(condition)
 
-def test_discovery_after_creation():
-    with Server() as server:
-        log.info('Created server "{0}"'.format(server.name))
+    def test_discovery_before_creation(self):
+        listener = TestDiscovery.Listener()
+        browser = ServerBrowser(listener, io_loop=self.io_loop)
 
-        listener = TestListener()
-        browser = ServerBrowser(listener)
+        with Server(io_loop=self.io_loop) as server:
+            log.info('Created server "{0}"'.format(server.name))
 
-        assert wait_for_server_add(listener, server.name)
+            assert self.wait_for_server_add(listener, server.name)
 
-        for s in listener.servers:
-            if s.name == server.name:
-                log.info('Discovered server has endpoint {0} which should be {1}'.format(
-                    s.endpoint, server.endpoints[EndpointType.control]))
-                assert s.endpoint == server.endpoints[EndpointType.control]
+            for s in listener.servers:
+                if s.name == server.name:
+                    log.info('Discovered server has endpoint {0} which should be {1}'.format(
+                        s.endpoint, server.endpoints[EndpointType.control]))
+                    assert s.endpoint == server.endpoints[EndpointType.control]
 
-    assert wait_for_server_remove(listener, server.name)
+        assert self.wait_for_server_remove(listener, server.name)
+
+    def test_discovery_after_creation(self):
+        with Server(io_loop=self.io_loop) as server:
+            log.info('Created server "{0}"'.format(server.name))
+
+            listener = TestDiscovery.Listener()
+            browser = ServerBrowser(listener, io_loop=self.io_loop)
+
+            assert self.wait_for_server_add(listener, server.name)
+
+            for s in listener.servers:
+                if s.name == server.name:
+                    log.info('Discovered server has endpoint {0} which should be {1}'.format(
+                        s.endpoint, server.endpoints[EndpointType.control]))
+                    assert s.endpoint == server.endpoints[EndpointType.control]
+
+        assert self.wait_for_server_remove(listener, server.name)
+
+    # Use a ZMQ-compatible I/O loop so that we can use `ZMQStream`.
+    def get_new_ioloop(self):
+        return ZMQIOLoop()

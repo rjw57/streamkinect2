@@ -9,6 +9,7 @@ import socket
 import uuid
 import weakref
 
+from tornado.ioloop import IOLoop
 import zeroconf
 import zmq
 from zmq.eventloop.zmqstream import ZMQStream
@@ -62,7 +63,7 @@ class Server(object):
 
     If not *None*, *io_loop* is the event loop to pass to
     :py:class:`zmq.eventloop.zmqstream.ZMQStream` used to communicate with the
-    cleint. If *None* then global IO loop is used.
+    cleint. If *None* then global IOLoop instance is used.
 
     .. py:attribute:: address
 
@@ -166,6 +167,7 @@ class Server(object):
         """Handle a control message. Return a pair giving the type and payload of the response."""
 
         if type == 'ping':
+            log.info('Got ping from client')
             return 'pong', None
         else:
             return 'error', { 'message': 'Unknown message type "{0}"'.format(type) }
@@ -224,9 +226,18 @@ class ServerBrowser(object):
     unsurprisingly, will be called when servers are added and removed from the
     network.
 
+    *io_loop* is an instance of :py:class:`tornado.ioloop.IOLoop` which should
+    be used to schedule callback events on the listener. If *None* then the
+    global instance is used. This is needed because server discovery happens on
+    a separate thread to the tornado event loop which is used for the rest of
+    the network communication. Hence, when a server is discovered, the browser
+    co-ordinates with the event loop to call the :py:meth:`add_server` and
+    :py:meth:`remove_server` methods on the main IOLoop thread.
+
     """
-    def __init__(self, listener):
+    def __init__(self, listener, io_loop=None):
         self.listener = listener
+        self._io_loop = io_loop or IOLoop.instance()
 
         # A browser. Note the use of a weak reference to us.
         self._browser = zeroconf.ServiceBrowser(_ZC, _ZC_SERVICE_TYPE,
@@ -266,7 +277,7 @@ class ServerBrowser(object):
             info = ServerInfo(name=short_name, endpoint=endpoint)
 
             self._servers[name] = info
-            listener.add_server(info)
+            browser._io_loop.add_callback(listener.add_server, info)
 
         def removeService(self, zeroconf, type, name):
             browser = self.browser_ref()
@@ -283,6 +294,6 @@ class ServerBrowser(object):
             try:
                 info = self._servers[name]
                 del self._servers[name]
-                listener.remove_server(info)
+                browser._io_loop.add_callback(listener.remove_server, info)
             except KeyError: # pragma: no cover
                 log.warn('Ignoring server which we know nothing about')
