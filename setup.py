@@ -27,7 +27,7 @@ setup(
     ],
 
     install_requires=[
-        'zeroconf', 'pyzmq', 'lz4',
+        'zeroconf', 'pyzmq', 'lz4', 'enum34',
     ],
 
     setup_requires=[

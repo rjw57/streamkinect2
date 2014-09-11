@@ -3,6 +3,7 @@ Server
 ======
 """
 from collections import namedtuple
+import enum
 from logging import getLogger
 import json
 import socket
@@ -33,12 +34,35 @@ class ServerInfo(namedtuple('ServerInfo', ['name', 'endpoint'])):
 
     .. py:attribute:: endpoint
 
-        Connection information which should be passed to
+        Connection information for control channel which should be passed to
         :py:class:`streamkinect2.client.Client`.
     """
 
+class EndpointType(enum.Enum):
+    """
+    Enumeration of endpoints exposed by a :py:class:`Server`.
+
+    .. py:attribute:: control
+
+        A *REP* endpoint which accepts JSON-formatted control messages.
+
+    .. py:attribute:: depth
+
+        A *PUB* endpoint which broadcasts compressed depth frames to connected subscribers.
+
+    """
+    control = 1
+    depth = 2
+
 class Server(object):
     """A server capable of streaming Kinect2 data to interested clients.
+
+    Servers may have their lifetime managed by using them within a ``with`` statement::
+
+        with Server() as s:
+            # server is running
+            pass
+        # server has stopped
 
     *address* and *port* are the bind address (as a decimal-dotted IP address)
     and port from which to start serving. If *port* is None, a random port is
@@ -47,26 +71,24 @@ class Server(object):
     *name* should be some human-readable string describing the server. If
     *None* then a sensible default name is used.
 
+    *zmq_ctx* should be the zmq context to create servers in. If *None*, then
+    :py:meth:`zmq.Context.instance` is used to get the global instance.
+
     .. py:attribute:: address
 
         The address bound to as a decimal-dotted string.
 
-    .. py:attribute:: port
+    .. py:attribute:: endpoints
 
-        The port bound to.
-
-    .. py:attribute:: endpoint
-
-        The zeromq endpoint address for this server.
+        The zeromq endpoints for this server. A *dict*-like object keyed by
+        endpoint type. (See :py:class:`EndpointType`.)
 
     .. py:attribute:: is_running
 
         *True* when the server is running, *False* otherwise.
 
     """
-    def __init__(self, address=None, port=None, start_immediately=True, name=None):
-        self.is_running = False
-
+    def __init__(self, address=None, start_immediately=False, name=None, zmq_ctx=None):
         # Choose a unique name if none is specified
         if name is None:
             name = 'Kinect2 {0}'.format(uuid.uuid4())
@@ -74,27 +96,18 @@ class Server(object):
         if address is None:
             address = _ZC.intf # Is this a private attribute?
 
-        # Create a zeromq socket
-        ctx = zmq.Context.instance()
-        self._socket = ctx.socket(zmq.PUB)
-        if port is None:
-            port = self._socket.bind_to_random_port('tcp://{0}'.format(address))
-        else:
-            self._socket.bind('tcp://{0}:{1}'.format(address, port))
-
         # Set public attributes
+        self.is_running = False
         self.name = name
         self.address = address
-        self.port = port
-        self.endpoint = 'tcp://{0}:{1}'.format(address, port)
+        self.endpoints = {}
 
-        properties = { 'endpoint': self.endpoint, }
+        # zmq sockets for each endpoint
+        self._sockets = {}
 
-        # Create a Zeroconf service info for ourselves
-        self._zc_info = zeroconf.ServiceInfo(_ZC_SERVICE_TYPE,
-            '.'.join((self.name, _ZC_SERVICE_TYPE)),
-            address=socket.inet_aton(self.address), port=self.port,
-            properties=json.dumps(properties).encode('utf8'))
+        if zmq_ctx is None:
+            zmq_ctx = zmq.Context.instance()
+        self._zmq_ctx = zmq_ctx
 
         if start_immediately:
             self.start()
@@ -103,7 +116,44 @@ class Server(object):
         if self.is_running:
             self.stop()
 
+    def _create_and_bind_socket(self, type):
+        """Create and bind a socket of the specified type.  Returns the socket
+        and endpoint address.
+
+        """
+        socket = self._zmq_ctx.socket(zmq.PUB)
+        port = socket.bind_to_random_port('tcp://{0}'.format(self.address))
+        return socket, 'tcp://{0}:{1}'.format(self.address, port)
+
+    def __enter__(self):
+        self.start()
+        return self
+
+    def __exit__(self, type, value, traceback):
+        self.stop()
+
     def start(self):
+        if self.is_running:
+            log.warn('Server already running')
+            return
+
+        # Create zeromq sockets
+        endpoints_to_create = [
+            (zmq.REP, EndpointType.control),
+            (zmq.PUB, EndpointType.depth),
+        ]
+        for type, key in endpoints_to_create:
+            self._sockets[key], self.endpoints[key] = self._create_and_bind_socket(type)
+
+        # Use the control endpoint's port as the port to advertise on zeroconf
+        control_port = int(self.endpoints[EndpointType.control].split(':')[2])
+
+        # Create a Zeroconf service info for ourselves
+        self._zc_info = zeroconf.ServiceInfo(_ZC_SERVICE_TYPE,
+            '.'.join((self.name, _ZC_SERVICE_TYPE)),
+            address=socket.inet_aton(self.address), port=control_port,
+            properties={})
+
         # register ourselves with zeroconf
         log.info('Registering server "{0}" with Zeroconf'.format(self.name))
         _ZC.registerService(self._zc_info)
@@ -111,16 +161,17 @@ class Server(object):
         self.is_running = True
 
     def stop(self):
-        if self._socket.closed:
-            log.error('Server already stopped')
+        if not self.is_running:
+            log.warn('Server already stopped')
             return
 
         # unregister ourselves with zeroconf
         log.info('Unregistering server "{0}" with Zeroconf'.format(self.name))
         _ZC.unregisterService(self._zc_info)
 
-        # close the socket
-        self._socket.close()
+        # close the sockets
+        for s in self._sockets.values():
+            s.close()
 
         self.is_running = False
 
@@ -172,15 +223,9 @@ class ServerBrowser(object):
             address = socket.inet_ntoa(zc_info.getAddress())
             port = zc_info.getPort()
 
-            # Use endpoint from server if possible
-            try:
-                props = json.loads(zc_info.getText().decode('utf8'))
-                endpoint = props['endpoint']
-            except (ValueError, KeyError):
-                log.warn('Server did not specify an endpoint. Guessing a sensible value.')
-                endpoint = 'tcp://{0}:{1}'.format(address, port)
-
-            info = ServerInfo(name=short_name, endpoint=props['endpoint'])
+            # Form control endpoint address
+            endpoint = 'tcp://{0}:{1}'.format(address, port)
+            info = ServerInfo(name=short_name, endpoint=endpoint)
 
             self._servers[name] = info
             listener.add_server(info)
