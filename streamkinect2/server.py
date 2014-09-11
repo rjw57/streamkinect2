@@ -3,15 +3,17 @@ Server
 ======
 """
 from collections import namedtuple
-import enum
-from logging import getLogger
 import json
+from logging import getLogger
 import socket
 import uuid
 import weakref
 
 import zeroconf
 import zmq
+from zmq.eventloop.zmqstream import ZMQStream
+
+from .common import EndpointType
 
 # Create our global zeroconf object
 _ZC = zeroconf.Zeroconf()
@@ -38,22 +40,6 @@ class ServerInfo(namedtuple('ServerInfo', ['name', 'endpoint'])):
         :py:class:`streamkinect2.client.Client`.
     """
 
-class EndpointType(enum.Enum):
-    """
-    Enumeration of endpoints exposed by a :py:class:`Server`.
-
-    .. py:attribute:: control
-
-        A *REP* endpoint which accepts JSON-formatted control messages.
-
-    .. py:attribute:: depth
-
-        A *PUB* endpoint which broadcasts compressed depth frames to connected subscribers.
-
-    """
-    control = 1
-    depth = 2
-
 class Server(object):
     """A server capable of streaming Kinect2 data to interested clients.
 
@@ -74,6 +60,10 @@ class Server(object):
     *zmq_ctx* should be the zmq context to create servers in. If *None*, then
     :py:meth:`zmq.Context.instance` is used to get the global instance.
 
+    If not *None*, *io_loop* is the event loop to pass to
+    :py:class:`zmq.eventloop.zmqstream.ZMQStream` used to communicate with the
+    cleint. If *None* then global IO loop is used.
+
     .. py:attribute:: address
 
         The address bound to as a decimal-dotted string.
@@ -81,14 +71,14 @@ class Server(object):
     .. py:attribute:: endpoints
 
         The zeromq endpoints for this server. A *dict*-like object keyed by
-        endpoint type. (See :py:class:`EndpointType`.)
+        endpoint type. (See :py:class:`streamkinect2.common.EndpointType`.)
 
     .. py:attribute:: is_running
 
         *True* when the server is running, *False* otherwise.
 
     """
-    def __init__(self, address=None, start_immediately=False, name=None, zmq_ctx=None):
+    def __init__(self, address=None, start_immediately=False, name=None, zmq_ctx=None, io_loop=None):
         # Choose a unique name if none is specified
         if name is None:
             name = 'Kinect2 {0}'.format(uuid.uuid4())
@@ -102,8 +92,9 @@ class Server(object):
         self.address = address
         self.endpoints = {}
 
-        # zmq sockets for each endpoint
-        self._sockets = {}
+        # zmq streams for each endpoint
+        self._streams = {}
+        self._io_loop = io_loop
 
         if zmq_ctx is None:
             zmq_ctx = zmq.Context.instance()
@@ -116,23 +107,11 @@ class Server(object):
         if self.is_running:
             self.stop()
 
-    def _create_and_bind_socket(self, type):
-        """Create and bind a socket of the specified type.  Returns the socket
-        and endpoint address.
+    def start(self):
+        """Explicitly start the server. If the server is already running, this
+        has no effect beyond logging a warning.
 
         """
-        socket = self._zmq_ctx.socket(zmq.PUB)
-        port = socket.bind_to_random_port('tcp://{0}'.format(self.address))
-        return socket, 'tcp://{0}:{1}'.format(self.address, port)
-
-    def __enter__(self):
-        self.start()
-        return self
-
-    def __exit__(self, type, value, traceback):
-        self.stop()
-
-    def start(self):
         if self.is_running:
             log.warn('Server already running')
             return
@@ -143,7 +122,10 @@ class Server(object):
             (zmq.PUB, EndpointType.depth),
         ]
         for type, key in endpoints_to_create:
-            self._sockets[key], self.endpoints[key] = self._create_and_bind_socket(type)
+            self._streams[key], self.endpoints[key] = self._create_and_bind_socket(type)
+
+        # Listen for incoming messages
+        self._streams[EndpointType.control].on_recv(self._control_recv)
 
         # Use the control endpoint's port as the port to advertise on zeroconf
         control_port = int(self.endpoints[EndpointType.control].split(':')[2])
@@ -161,6 +143,10 @@ class Server(object):
         self.is_running = True
 
     def stop(self):
+        """Explicitly stop the server. If the server is not running this has no
+        effect beyond logging a warning.
+
+        """
         if not self.is_running:
             log.warn('Server already stopped')
             return
@@ -170,10 +156,62 @@ class Server(object):
         _ZC.unregisterService(self._zc_info)
 
         # close the sockets
-        for s in self._sockets.values():
-            s.close()
+        for s in self._streams.values():
+            s.socket.close()
+        self._streams = {}
 
         self.is_running = False
+
+    def _handle_control(self, type, payload):
+        """Handle a control message. Return a pair giving the type and payload of the response."""
+
+        if type == 'ping':
+            return 'pong', None
+        else:
+            return 'error', { 'message': 'Unknown message type "{0}"'.format(type) }
+
+    def _create_and_bind_socket(self, type):
+        """Create and bind a socket of the specified type. Returns the ZMQStream
+        and endpoint address.
+
+        """
+        socket = self._zmq_ctx.socket(type)
+        port = socket.bind_to_random_port('tcp://{0}'.format(self.address))
+        return ZMQStream(socket, self._io_loop), 'tcp://{0}:{1}'.format(self.address, port)
+
+    def __enter__(self):
+        self.start()
+        return self
+
+    def __exit__(self, type, value, traceback):
+        self.stop()
+
+    def _control_recv(self, msg):
+        # Read JSON message
+        try:
+            msg = json.loads((b''.join(msg)).decode('utf8'))
+        except ValueError:
+            log.warn('Server ignoring invalid control packet')
+            return
+
+        # Check packet has required fields
+        if 'seq' not in msg:
+            log.warn('Server ignoring control packet lacking sequence number')
+            return
+        if 'type' not in msg:
+            log.warn('Server ignoring control packet lacking type')
+            return
+
+        seq, type = msg['seq'], msg['type']
+        payload = msg['payload'] if 'payload' in msg else None
+
+        # Handle control packet and receive response type and payload
+        r_type, r_payload = self._handle_control(type, payload)
+
+        # Send response
+        self._streams[EndpointType.control].send_json(
+            { 'seq': seq, 'type': r_type, 'payload': r_payload }
+        )
 
 class ServerBrowser(object):
     """An object which listens for kinect2 streaming servers on the network.

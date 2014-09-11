@@ -3,7 +3,8 @@ Test ZeroConf service discovery.
 
 """
 from logging import getLogger
-from streamkinect2.server import Server, ServerBrowser, EndpointType
+from streamkinect2.server import Server, ServerBrowser
+from streamkinect2.common import EndpointType
 from .util import TestListener, wait_for_server_add, wait_for_server_remove
 
 log = getLogger(__name__)

@@ -9,3 +9,6 @@ API Reference
 
 .. automodule:: streamkinect2.client
     :members:
+
+.. automodule:: streamkinect2.common
+    :members:
