@@ -39,6 +39,11 @@ class Client(object):
     If *connect_immediately* is *True* then the client attempts to connect when
     constructed. If *False* then :py:meth:`connect` must be used explicitly.
 
+    .. py:attribute:: endpoints
+
+        A :py:class:`dict` of endpoint addresses keyed by
+        :py:class:`streamkinect2common.EndpointType`.
+
     .. py:attribute:: is_connected
 
         *True* if the client is connected. *False* otherwise.
@@ -94,6 +99,8 @@ class Client(object):
 
         self.is_connected = True
 
+        self._request_endpoints()
+
     def disconnect(self):
         """Explicitly disconnect the client."""
         if not self.is_connected:
@@ -104,6 +111,30 @@ class Client(object):
         self._control_stream = None
 
         self.is_connected = False
+
+    def _request_endpoints(self):
+        """Request the list of endpoints from the server.
+
+        """
+        # Handler function
+        def got_endpoints(seq, type, payload):
+            if type != 'endpoints':
+                raise ProtocolError('Expected endpoints list but got "{0}" instead'.format(type))
+
+            # Fill in out endpoint list from payload
+            log.info('Received endpoints from server')
+            for endpoint_type in EndpointType:
+                try:
+                    self.endpoints[endpoint_type] = payload[endpoint_type.name]
+                    log.info('Server added "{0.name}" endpoint at "{1}"'.format(
+                        endpoint_type, payload[endpoint_type.name]))
+                except KeyError:
+                    # Skip endpoints we don't know about
+                    pass
+
+        # Send packet
+        log.info('Requesting endpoints from server')
+        self._control_send('listEndpoints', recv_cb=got_endpoints)
 
     def _ensure_connected(self):
         if not self.is_connected:

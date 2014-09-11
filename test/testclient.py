@@ -75,6 +75,26 @@ class TestBasicClient(AsyncTestCase):
         control_endpoint = self.server.endpoints[EndpointType.control]
         assert self.client.endpoints[EndpointType.control] == control_endpoint
 
+    def test_depth_endpoint(self):
+        depth_endpoint = self.server.endpoints[EndpointType.depth]
+
+        def condition():
+            try:
+                client_depth_endpoint = self.client.endpoints[EndpointType.depth]
+            except KeyError:
+                return False
+            return client_depth_endpoint == depth_endpoint
+
+        def keep_checking():
+            if condition():
+                self.stop()
+            else:
+                self.io_loop.call_later(0.1, keep_checking)
+        self.io_loop.add_callback(keep_checking)
+
+        # Wait for client to discover the depth endpoint
+        self.wait()
+
     def test_ping(self):
         def pong():
             log.info('Got pong from server')
