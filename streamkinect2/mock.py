@@ -32,6 +32,26 @@ class DepthFrame(namedtuple('DepthFrame', ('data',))):
 
 class MockKinect(threading.Thread):
     """A mock Kinect device.
+
+    This class implements a "virtual" Kinect which generates some mock data. It
+    can be used for testing or benchmarking.
+
+    Use :py:meth:`start` and :py:meth:`stop` to start and stop the device or
+    wrap it in a ``with`` statement::
+
+        with MockKinect() as kinect:
+            # kinect is running here
+            pass
+        # kinect has stopped running
+
+    .. note::
+
+        Listener callbacks are called in a separate thread. If using something
+        like :py:class:`tornado.ioloop.IOLoop`, then you will need to make sure
+        that server messages are sent on the right thread. The
+        :py:class:`streamkinect2.server.Server` class should take care of that
+        in most cases you will encounter.
+
     """
     def __init__(self):
         super(MockKinect, self).__init__()
@@ -54,6 +74,10 @@ class MockKinect(threading.Thread):
             self._depth_listeners.add(listener)
 
     def remove_depth_frame_listener(self, listener):
+        """Remove *listener* which had previously been added via
+        :py:meth:`add_depth_frame_listener`.
+
+        """
         with self._depth_listeners_lock:
             self._depth_listeners.remove(listener)
 
@@ -64,7 +88,18 @@ class MockKinect(threading.Thread):
     def __exit__(self, type, value, traceback):
         self.stop()
 
+    def start(self):
+        """Start the mock device running. Mock data is generated on a separate
+        thread.
+
+        """
+        super(MockKinect, self).start()
+
     def stop(self):
+        """Stop the mock device running. Blocks until the thread shuts down
+        gracefully with a one second timeout.
+
+        """
         self._should_stop = True
         self.join(1)
 
