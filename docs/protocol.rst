@@ -38,9 +38,9 @@ object. This is repeated until the client disconnects.
 All messages have the following form::
 
     {
-        "seq": <sequence number>,
-        "type": <string describing type of message>,
-        "payload": <optional JSON object whose schema is type dependant>
+        "seq": "<sequence number>",
+        "type": "<string describing type of message>",
+        "payload": "<optional JSON object whose schema is type dependant>"
     }
 
 The server will copy the sequence number from the client message into its
@@ -55,12 +55,36 @@ only be sent by a client and some only by a server.
 ``ping`` type
 ~~~~~~~~~~~~~
 
-A client may send a ``ping`` message. No payload is required. The server will
-respond with an empty-payload message of type ``pong``.
+A ``ping`` message MUST only be sent by a client. No payload is required. The
+server MUST respond with an empty-payload message of type ``pong``.
 
 ``pong`` type
 ~~~~~~~~~~~~~
 
-A server will send a ``pong`` message in response to a ``ping``. No payload is
-required.
+A ``pong`` message MUST only be sent by a server. It MUST do so in response to
+a ``ping``.  No payload is required.
 
+``listEndpoints`` type
+~~~~~~~~~~~~~~~~~~~~~~
+
+A ``listEndpoints`` message MUST only be sent by a client. No payload is
+required. The server MUST respond with a ``endpoints`` message.
+
+``endpoints`` type
+~~~~~~~~~~~~~~~~~~
+
+An ``endpoints`` messages MUST only be sent by a server. It MUST do so in
+response to a ``listEndpoints`` message. A payload MUST be present. The payload
+MUST be a JSON object whose fields correspond to endpoint names and whose
+values correspond to ZeroMQ-style endpoint addresses. The client MUST ignore
+any endpoints whose name it does not recognise. The server MAY advertise any
+endpoints it wishes but it MUST include at least a ``control`` endpoint with a
+ZeroMQ address corresponding to the control endpoint. The advertised endpoints
+MAY be non-unique and MAY have different IP addresses.
+
+A typical payload will look like the following::
+
+    {
+        "control": "tcp://10.0.0.1:1234",
+        "depth": "tcp://10.0.0.1:1235"
+    }
