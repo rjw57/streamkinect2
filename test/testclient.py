@@ -75,15 +75,15 @@ class TestBasicClient(AsyncTestCase):
         control_endpoint = self.server.endpoints[EndpointType.control]
         assert self.client.endpoints[EndpointType.control] == control_endpoint
 
-    def test_depth_endpoint(self):
-        depth_endpoint = self.server.endpoints[EndpointType.depth]
+    def test_event_endpoint(self):
+        event_endpoint = self.server.endpoints[EndpointType.event]
 
         def condition():
             try:
-                client_depth_endpoint = self.client.endpoints[EndpointType.depth]
+                client_event_endpoint = self.client.endpoints[EndpointType.event]
             except KeyError:
                 return False
-            return client_depth_endpoint == depth_endpoint
+            return client_event_endpoint == event_endpoint
 
         def keep_checking():
             if condition():
@@ -92,7 +92,7 @@ class TestBasicClient(AsyncTestCase):
                 self.io_loop.call_later(0.1, keep_checking)
         self.io_loop.add_callback(keep_checking)
 
-        # Wait for client to discover the depth endpoint
+        # Wait for client to discover the event endpoint
         self.wait()
 
     def test_server_name(self):

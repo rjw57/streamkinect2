@@ -22,6 +22,11 @@ class EndpointType(enum.Enum):
 
         A *PUB* endpoint which broadcasts compressed depth frames to connected subscribers.
 
+    .. py:attribute:: event
+
+        A *PUB* endpoint which the server uses to broadcast updates about its state.
+
     """
     control = 1
     depth = 2
+    event = 3

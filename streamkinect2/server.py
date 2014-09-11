@@ -147,7 +147,7 @@ class Server(object):
         # Create zeromq sockets
         endpoints_to_create = [
             (zmq.REP, EndpointType.control),
-            (zmq.PUB, EndpointType.depth),
+            (zmq.PUB, EndpointType.event),
         ]
         for type, key in endpoints_to_create:
             self._streams[key], self.endpoints[key] = self._create_and_bind_socket(type)
