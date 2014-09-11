@@ -73,7 +73,7 @@ server MUST respond with a ``me`` message.
 ``me`` type
 ~~~~~~~~~~~
 
-An ``me`` messages MUST only be sent by a server. It MUST do so in
+A ``me`` messages MUST only be sent by a server. It MUST do so in
 response to a ``who`` message. A payload MUST be present. The payload MUST be a
 JSON object including at least a ``version`` field which should be the numeral
 "1". A client MUST ignore any ``me`` message with a ``version`` field set to
