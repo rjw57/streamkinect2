@@ -6,7 +6,6 @@ from collections import namedtuple
 import json
 from logging import getLogger
 import socket
-import uuid
 import weakref
 
 from tornado.ioloop import IOLoop
@@ -80,9 +79,11 @@ class Server(object):
 
     """
     def __init__(self, address=None, start_immediately=False, name=None, zmq_ctx=None, io_loop=None):
-        # Choose a unique name if none is specified
+        # Choose a sensible name if none is specified
         if name is None:
-            name = 'Kinect2 {0}'.format(uuid.uuid4())
+            import getpass
+            import platform
+            name = 'Kinect for {0} on {1}'.format(getpass.getuser(), platform.node())
 
         if address is None:
             address = _ZC.intf # Is this a private attribute?
