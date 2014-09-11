@@ -2,10 +2,8 @@
 Mock kinect support
 
 """
-import functools
 from logging import getLogger
 import time
-from nose.plugins.skip import SkipTest
 
 log = getLogger(__name__)
 
@@ -20,14 +18,6 @@ from streamkinect2.compress import DepthFrameCompresser
 # This is intentionally low to not be too hard on the test server. Use a
 # benchmark script if you want to get a better idea of performance.
 TARGET_FPS = 10
-
-def skip_if_no_mock(f):
-    @functools.wraps(f)
-    def wrapper(*args, **kwargs):
-        if mock is None:
-            raise SkipTest('Mock kinect not available')
-        return f(*args, **kwargs)
-    return wrapper
 
 def wait_for_frames(kinect, min_count, timeout):
     state = { 'count': 0 }
@@ -61,19 +51,16 @@ def wait_for_and_compress_frames(kinect, min_count, timeout):
     # Return the packets received and how long we waited
     return compressed, (end-start)
 
-@skip_if_no_mock
 def test_create_mock():
     with mock.MockKinect() as kinect:
         pass
 
-@skip_if_no_mock
 def test_getting_frames():
     with mock.MockKinect() as kinect:
         count, t = wait_for_frames(kinect, 1, 0.5)
     log.info('Got {0} frame(s) in {1:.2f} seconds'.format(count, t))
     assert count >= 1
 
-@skip_if_no_mock
 def test_getting_enough_fps():
     with mock.MockKinect() as kinect:
         count, t = wait_for_frames(kinect, 30, 0.5)
@@ -84,14 +71,12 @@ def test_getting_enough_fps():
         log.error('FPS should be > {0}'.format(TARGET_FPS))
     assert fps >= TARGET_FPS
 
-@skip_if_no_mock
 def test_getting_compressed_frames():
     with mock.MockKinect() as kinect:
         packets, t = wait_for_and_compress_frames(kinect, 10, 0.5)
     log.info('Got {0} compressed packets in {1:.2f} seconds'.format(len(packets), t))
     assert len(packets) > 0
 
-@skip_if_no_mock
 def test_getting_good_enough_compression():
     with mock.MockKinect() as kinect:
         packets, t = wait_for_and_compress_frames(kinect, 1024, 2.0)
@@ -101,7 +86,6 @@ def test_getting_good_enough_compression():
     log.info('Total size is {0} bytes => {1:.2f} Mbytes/s'.format(size, data_rate))
     assert data_rate < 80 * 1024 * 1024
 
-@skip_if_no_mock
 def test_getting_fast_enough_compression():
     with mock.MockKinect() as kinect:
         packets, t = wait_for_and_compress_frames(kinect, 120, 2.0)
