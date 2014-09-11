@@ -19,7 +19,7 @@ import os
 import streamkinect2.version as meta
 
 # Docs can be built with mock modules
-from unittest.mock import MagicMock
+from mock import MagicMock
 
 class Mock(MagicMock):
     @classmethod
