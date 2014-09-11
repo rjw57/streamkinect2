@@ -129,7 +129,6 @@ class Client(object):
                 raise ProtocolError('Expected me list but got "{0}" instead'.format(type))
 
             log.info('Received "me" from server')
-            print(payload)
 
             if 'version' not in payload or payload['version'] != 1:
                 log.error('me had wrong or missing version')

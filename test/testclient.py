@@ -110,6 +110,29 @@ class TestBasicClient(AsyncTestCase):
         self.io_loop.add_callback(keep_checking)
         self.wait()
 
+#    def test_device_after_connect(self):
+#        def have_me_condition():
+#            return self.client.server_name is not None
+#
+#        def have_kinect_condition():
+#            return len(self.client.kinect_ids) == 1
+#
+#        def keep_checking():
+#            if condition():
+#                self.stop()
+#            else:
+#                self.io_loop.call_later(0.1, keep_checking)
+#
+#        condition = have_me_condition
+#        self.io_loop.add_callback(keep_checking)
+#        self.wait()
+#
+#        self.server.add_kinect(MockKinect())
+#
+#        condition = have_kinect_condition
+#        self.io_loop.add_callback(keep_checking)
+#        self.wait()
+
     def test_server_name(self):
         def condition():
             return self.client.server_name == self.server.name
