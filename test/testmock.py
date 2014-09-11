@@ -19,7 +19,7 @@ from streamkinect2.compress import DepthFrameCompresser
 
 # This is intentionally low to not be too hard on the test server. Use a
 # benchmark script if you want to get a better idea of performance.
-TARGET_FPS = 30
+TARGET_FPS = 10
 
 def skip_if_no_mock(f):
     @functools.wraps(f)
