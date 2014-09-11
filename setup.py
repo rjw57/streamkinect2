@@ -27,7 +27,12 @@ setup(
     ],
 
     install_requires=[
-        'zeroconf', 'pyzmq', 'lz4', 'enum34', 'tornado',
+        'enum34',
+        'lz4',
+        'numpy',
+        'pyzmq',
+        'tornado',
+        'zeroconf',
     ],
 
     setup_requires=[
@@ -40,6 +45,5 @@ setup(
 
     extras_require={
         'docs': [ 'sphinx', 'docutils', ],
-        'mock': [ 'numpy', ],
     },
 )
