@@ -53,7 +53,7 @@ class Server(object):
 
     *address* and *port* are the bind address (as a decimal-dotted IP address)
     and port from which to start serving. If *port* is None, a random port is
-    chosen. If *address* is '*None* then attempt to infer a sensible default.
+    chosen. If *address* is *None* then attempt to infer a sensible default.
 
     *name* should be some human-readable string describing the server. If
     *None* then a sensible default name is used.
