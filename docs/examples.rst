@@ -15,6 +15,6 @@ Mock kinect server
 ``````````````````
 
 The following program shows how to create a simple server which will serve data
-from a mock Kinect. See the :py:class:`streamkinect2.mock` module.
+from a mock Kinect. See the :py:mod:`streamkinect2.mock` module.
 
 .. literalinclude:: ../scripts/mock_server.py
