@@ -3,7 +3,10 @@ Basic server support
 """
 
 from logging import getLogger
+from tornado.testing import AsyncTestCase
+from zmq.eventloop.ioloop import ZMQIOLoop
 from streamkinect2.server import Server
+from streamkinect2.mock import MockKinect
 
 log = getLogger(__name__)
 
@@ -22,3 +25,36 @@ def test_server_with_statement():
     with Server() as s:
         assert s.is_running
     assert not s.is_running
+
+class TestServer(AsyncTestCase):
+    def setUp(self):
+        super(TestServer, self).setUp()
+        self.server = Server(io_loop=self.io_loop)
+
+    def tearDown(self):
+        super(TestServer, self).tearDown()
+        if self.server.is_running:
+            self.server.stop()
+
+    def test_adding_kinects_after_start(self):
+        mock = MockKinect()
+        with self.server:
+            assert len(self.server.kinects) == 0
+            self.server.add_kinect(mock)
+            assert len(self.server.kinects) == 1
+            assert self.server.kinects[0] is mock
+            self.server.remove_kinect(mock)
+            assert len(self.server.kinects) == 0
+
+    def test_adding_kinects_before(self):
+        mock = MockKinect()
+        assert len(self.server.kinects) == 0
+        self.server.add_kinect(mock)
+        assert len(self.server.kinects) == 1
+        assert self.server.kinects[0] is mock
+        self.server.remove_kinect(mock)
+        assert len(self.server.kinects) == 0
+
+    # Use a ZMQ-compatible I/O loop so that we can use `ZMQStream`.
+    def get_new_ioloop(self):
+        return ZMQIOLoop()

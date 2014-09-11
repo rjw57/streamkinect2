@@ -78,6 +78,10 @@ class Server(object):
 
         *True* when the server is running, *False* otherwise.
 
+    .. py:attribute:: kinects
+
+        :py:class:`list` of kinect devices managed by this server. See :py:meth:`add_kinect`.
+
     """
     def __init__(self, address=None, start_immediately=False, name=None, zmq_ctx=None, io_loop=None):
         # Choose a sensible name if none is specified
@@ -99,6 +103,9 @@ class Server(object):
         self._streams = {}
         self._io_loop = io_loop
 
+        # kinects which we manage
+        self._kinects = set()
+
         if zmq_ctx is None:
             zmq_ctx = zmq.Context.instance()
         self._zmq_ctx = zmq_ctx
@@ -109,6 +116,24 @@ class Server(object):
     def __del__(self):
         if self.is_running:
             self.stop()
+
+    def add_kinect(self, kinect):
+        """Add a Kinect device to this server. *kinect* should be a object
+        implementing the same interface as
+        :py:class:`streamkinect2.mock.MockKinect`.
+
+        """
+        self._kinects.add(kinect)
+
+    def remove_kinect(self, kinect):
+        """Remove a Kinect device previously added via :py:meth:`add_kinect`."""
+        self._kinects.remove(kinect)
+
+    @property
+    def kinects(self):
+        # Return a list rather than exposing the fact that we store kinects in
+        # a set.
+        return list(self._kinects)
 
     def start(self):
         """Explicitly start the server. If the server is already running, this
