@@ -135,6 +135,7 @@ class Client(object):
 
             # Fill in server information
             self.server_name = payload['name']
+            log.info('Server identifies itself as "{0}"'.format(self.server_name))
 
             # Fill in out endpoint list from payload
             endpoints = payload['endpoints']
