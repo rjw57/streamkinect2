@@ -41,6 +41,9 @@ class ServerInfo(namedtuple('ServerInfo', ['name', 'endpoint'])):
         :py:class:`streamkinect2.client.Client`.
     """
 
+class _KinectRecord(namedtuple('_KinectRecord', ['kinect', 'endpoints', 'streams'])):
+    pass
+
 class Server(object):
     """A server capable of streaming Kinect2 data to interested clients.
 
@@ -103,8 +106,11 @@ class Server(object):
         self._streams = {}
         self._io_loop = io_loop
 
-        # kinects which we manage
-        self._kinects = set()
+        # state for sending events
+        self._event_sequence = 0
+
+        # kinects which we manage. Keyed by device id.
+        self._kinects = { }
 
         if zmq_ctx is None:
             zmq_ctx = zmq.Context.instance()
@@ -123,17 +129,26 @@ class Server(object):
         :py:class:`streamkinect2.mock.MockKinect`.
 
         """
-        self._kinects.add(kinect)
+        endpoints, streams = {}, {}
+
+        # Create zeromq sockets
+        endpoints_to_create = [
+            (zmq.PUB, EndpointType.depth),
+        ]
+        for type, key in endpoints_to_create:
+            streams[key], endpoints[key] = self._create_and_bind_socket(type)
+
+        self._kinects[kinect.unique_kinect_id] = _KinectRecord(kinect, endpoints, streams)
 
     def remove_kinect(self, kinect):
         """Remove a Kinect device previously added via :py:meth:`add_kinect`."""
-        self._kinects.remove(kinect)
+        del self._kinects[kinect.unique_kinect_id]
 
     @property
     def kinects(self):
         # Return a list rather than exposing the fact that we store kinects in
         # a set.
-        return list(self._kinects)
+        return list(k.kinect for k in self._kinects.values())
 
     def start(self):
         """Explicitly start the server. If the server is already running, this
@@ -190,6 +205,29 @@ class Server(object):
 
         self.is_running = False
 
+    def _on_me_changed(self):
+        self._event_send(self._current_me())
+
+    def _current_me(self):
+        devices = []
+        for device in self._kinects.values():
+            devices.append({
+                'id': device.kinect.unique_kinect_id,
+                'endpoints': dict((k.name, v) for k, v in device.endpoints.items()),
+            })
+
+        return {
+            'version': 1,
+            'name': self.name,
+            'endpoints': dict((k.name, v) for k, v in self.endpoints.items()),
+            'devices': devices,
+        }
+
+    def _event_send(self, type, payload):
+        self._event_sequence += 1
+        msg = { 'seq': self._event_sequence, 'type': type, 'payload': payload }
+        self._streams[EndpointType.event].send_json(msg)
+
     def _handle_control(self, type, payload):
         """Handle a control message. Return a pair giving the type and payload of the response."""
 
@@ -197,11 +235,7 @@ class Server(object):
             log.info('Got ping from client')
             return 'pong', None
         elif type == 'who':
-            return 'me', {
-                'version': 1,
-                'name': self.name,
-                'endpoints': dict((k.name, v) for k, v in self.endpoints.items()),
-            }
+            return 'me', self._current_me()
         else:
             log.warn('Unknown message type from client: "{0}"'.format(type))
             return 'error', { 'message': 'Unknown message type "{0}"'.format(type) }
