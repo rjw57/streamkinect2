@@ -4,6 +4,7 @@ Simple client which pings each server as it is discovered.
 
 """
 import logging
+import threading
 
 from tornado.ioloop import IOLoop
 from streamkinect2.server import ServerBrowser
@@ -38,22 +39,40 @@ class Listener(object):
     def remove_server(self, server_info):
         log.info('Server "{0.name}" at "{0.endpoint}" went away'.format(server_info))
 
+class IOLoopThread(threading.Thread):
+    def run(self):
+        # Create the server browser
+        log.info('Creating server browser...')
+        browser = ServerBrowser(Listener())
+
+        # Run the ioloop
+        log.info('Running...')
+        ioloop.IOLoop.instance().start()
+
+        log.info('Stopping')
+
+    def stop(self):
+        io_loop = ioloop.IOLoop.instance()
+        io_loop.add_callback(io_loop.stop)
+        self.join(3)
+
 def main():
     # Set log level
     logging.basicConfig(level=logging.INFO)
 
-    # Create the server
-    log.info('Creating server browser...')
-    browser = ServerBrowser(Listener())
+    print('=============================================')
+    print('Press Enter to exit')
+    print('=============================================')
 
-    log.info('Running event loop...')
-    try:
-        # Run the ioloop
-        ioloop.IOLoop.instance().start()
-    except KeyboardInterrupt:
-        log.info('Keyboard interrupt received')
-    log.info('Stopping')
+    # Start the event loop
+    ioloop_thread = IOLoopThread()
+    ioloop_thread.start()
+
+    # Wait for input
+    input()
+
+    # Stop thread
+    ioloop_thread.stop()
 
 if __name__ == '__main__':
     main()
-
