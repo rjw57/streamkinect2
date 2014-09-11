@@ -12,6 +12,7 @@ Support for a mock kinect when testing.
 from collections import namedtuple
 import threading
 import time
+import uuid
 
 import numpy as np
 
@@ -52,9 +53,16 @@ class MockKinect(threading.Thread):
         :py:class:`streamkinect2.server.Server` class should take care of that
         in most cases you will encounter.
 
+    .. py:attribute:: unique_kinect_id
+
+        A string with an opaque, unique id for this Kinect.
+
     """
     def __init__(self):
         super(MockKinect, self).__init__()
+
+        # Invent unique id
+        self.unique_kinect_id = uuid.uuid4().hex
 
         self._depth_listeners = set()
         self._depth_listeners_lock = threading.Lock()

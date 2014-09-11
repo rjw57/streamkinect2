@@ -99,3 +99,9 @@ class TestMock:
         if fps < TARGET_FPS:
             log.error('FPS should be > {0}'.format(TARGET_FPS))
         assert fps >= TARGET_FPS
+
+    def test_unique_id_exists_and_unique(self):
+        assert self.kinect.unique_kinect_id is not None
+
+        other_kinect = mock.MockKinect()
+        assert self.kinect.unique_kinect_id != other_kinect.unique_kinect_id
