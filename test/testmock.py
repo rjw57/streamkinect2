@@ -31,7 +31,7 @@ def skip_if_no_mock(f):
 
 def wait_for_frames(kinect, min_count, timeout):
     state = { 'count': 0 }
-    def frame_listener(w_and_h, frame):
+    def frame_listener(depth_frame):
         state['count'] += 1
 
     kinect.add_depth_frame_listener(frame_listener)
@@ -96,9 +96,7 @@ def test_getting_good_enough_compression():
     with mock.MockKinect() as kinect:
         packets, t = wait_for_and_compress_frames(kinect, 1024, 2.0)
     log.info('Got {0} compressed packets in {1:.2f} seconds'.format(len(packets), t))
-    size = 0
-    for p in packets:
-        size += len(p)
+    size = sum(sum(len(x) for x in y) for y in packets)
     data_rate = (float(size) / t) / (1024*1024)
     log.info('Total size is {0} bytes => {1:.2f} Mbytes/s'.format(size, data_rate))
     assert data_rate < 80 * 1024 * 1024

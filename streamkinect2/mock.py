@@ -9,6 +9,7 @@ Mock kinect
 Support for a mock kinect when testing.
 
 """
+from collections import namedtuple
 import threading
 import time
 
@@ -21,7 +22,17 @@ def _make_mock(frame_shape):
             (ys-(frame_shape[0]>>1))*(ys-(frame_shape[0]>>1))) + 500
     return wall.astype(np.uint16), sphere.astype(np.uint16)
 
+class DepthFrame(namedtuple('DepthFrame', ('data',))):
+    """A single frame of depth data.
+
+    .. py:attribute:: data
+
+        Python buffer-like object pointing to raw frame data.
+    """
+
 class MockKinect(threading.Thread):
+    """A mock Kinect device.
+    """
     def __init__(self):
         super(MockKinect, self).__init__()
 
@@ -34,6 +45,11 @@ class MockKinect(threading.Thread):
         self._should_stop = False
 
     def add_depth_frame_listener(self, listener):
+        """Add *listener* as a callable which is called with a
+        :py:class:`DepthFrame`-like object for each depth frame from the
+        camera.
+
+        """
         with self._depth_listeners_lock:
             self._depth_listeners.add(listener)
 
@@ -57,9 +73,10 @@ class MockKinect(threading.Thread):
             then = time.time()
             dx = int(np.sin(then) * 100)
             df = np.minimum(self._wall, np.roll(self._sphere, dx, 1))
+            depth_frame = DepthFrame(data=bytes(df.data))
             with self._depth_listeners_lock:
                 for l in self._depth_listeners:
-                    l(self._frame_shape[::-1], bytes(df.data))
+                    l(depth_frame)
             now = time.time()
 
             # HACK: aim for just above 60FPS

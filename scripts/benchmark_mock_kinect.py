@@ -11,7 +11,7 @@ def main():
     state = { 'n_frames': 0 }
     with MockKinect() as kinect:
         then = time.time()
-        def f(w_and_h, frame):
+        def f(frame):
             state['n_frames'] += 1
         kinect.add_depth_frame_listener(f)
         time.sleep(wait_time)
@@ -30,7 +30,7 @@ def main():
         kinect.remove_depth_frame_listener(fc.add_frame)
         now = time.time()
     delta = now - then
-    data_size = sum(len(p) for p in packets)
+    data_size = sum(sum(len(m) for m in p) for p in packets)
     data_rate = float(data_size) / delta # bytes/sec
     pps = len(packets) / delta
     print('Mock kinect runs at {0:.2f} packets/second w/ compression'.format(pps))
