@@ -1,6 +1,8 @@
 Example programs
 ================
 
+Here are some example programs which use the :py:mod:`streamkinect2` API.
+
 Simple ping client
 ``````````````````
 
