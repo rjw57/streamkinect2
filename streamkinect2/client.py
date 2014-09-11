@@ -60,6 +60,7 @@ class Client(object):
         self.endpoints = {
             EndpointType.control: control_endpoint
         }
+        self.kinect_ids = []
 
         if zmq_ctx is None:
             zmq_ctx = zmq.Context.instance()
@@ -128,6 +129,7 @@ class Client(object):
                 raise ProtocolError('Expected me list but got "{0}" instead'.format(type))
 
             log.info('Received "me" from server')
+            print(payload)
 
             if 'version' not in payload or payload['version'] != 1:
                 log.error('me had wrong or missing version')
@@ -136,6 +138,10 @@ class Client(object):
             # Fill in server information
             self.server_name = payload['name']
             log.info('Server identifies itself as "{0}"'.format(self.server_name))
+
+            # Extract kinects
+            devices = payload['devices']
+            self.kinect_ids = list(d['id'] for d in devices)
 
             # Fill in out endpoint list from payload
             endpoints = payload['endpoints']
