@@ -15,15 +15,6 @@ from .common import EndpointType, ProtocolError
 # Global logging object
 log = getLogger(__name__)
 
-def _ensure_connected(f):
-    """Decorator to check that the client is connected."""
-    @functools.wraps(f)
-    def wrapper(self, *args, **kwargs):
-        if not self.is_connected:
-            raise RuntimeError('Client is not connected')
-        return f(self, *args, **kwargs)
-    return wrapper
-
 class Client(object):
     """Client for a streaming kinect2 server.
 
@@ -74,16 +65,18 @@ class Client(object):
         if connect_immediately:
             self.connect()
 
-    @_ensure_connected
     def ping(self, pong_cb=None):
         """Send a 'ping' request to the server. If *pong_cb* is not *None*, it
         is a callable which is called with no arguments when the pong response
         has been received.
 
         """
+        self._ensure_connected()
+
         def pong(seq, type, payload, pong_cb=pong_cb):
             if pong_cb is not None:
                 pong_cb()
+
         self._control_send('ping', recv_cb=pong)
 
     def connect(self):
@@ -111,6 +104,10 @@ class Client(object):
         self._control_stream = None
 
         self.is_connected = False
+
+    def _ensure_connected(self):
+        if not self.is_connected:
+            raise RuntimeError('Client is not connected')
 
     def __enter__(self):
         self.connect()
