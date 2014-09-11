@@ -64,20 +64,28 @@ server MUST respond with an empty-payload message of type ``pong``.
 A ``pong`` message MUST only be sent by a server. It MUST do so in response to
 a ``ping``.  No payload is required.
 
-``listEndpoints`` type
-~~~~~~~~~~~~~~~~~~~~~~
+``who`` type
+~~~~~~~~~~~~
 
-A ``listEndpoints`` message MUST only be sent by a client. No payload is
-required. The server MUST respond with a ``endpoints`` message.
+A ``who`` message MUST only be sent by a client. No payload is required. The
+server MUST respond with a ``me`` message.
 
-``endpoints`` type
-~~~~~~~~~~~~~~~~~~
+``me`` type
+~~~~~~~~~~~
 
-An ``endpoints`` messages MUST only be sent by a server. It MUST do so in
-response to a ``listEndpoints`` message. A payload MUST be present. The payload
-MUST be a JSON object whose fields correspond to endpoint names and whose
-values correspond to ZeroMQ-style endpoint addresses. The client MUST ignore
-any endpoints whose name it does not recognise. The server MAY advertise any
+An ``me`` messages MUST only be sent by a server. It MUST do so in
+response to a ``who`` message. A payload MUST be present. The payload MUST be a
+JSON object including at least a ``version`` field which should be the numeral
+"1". A client MUST ignore any ``me`` message with a ``version`` field set to
+any other value.
+
+The payload MUST include a field named ``name`` whose value is a string
+representing a human-readable name for the server.
+
+The payload MUST include a field named ``endpoints``. This field's value MUST
+be a JSON object whose fields correspond to endpoint names and whose values
+correspond to ZeroMQ-style endpoint addresses. The client MUST ignore any
+endpoints whose name it does not recognise. The server MAY advertise any
 endpoints it wishes but it MUST include at least a ``control`` endpoint with a
 ZeroMQ address corresponding to the control endpoint. The advertised endpoints
 MAY be non-unique and MAY have different IP addresses.
@@ -85,6 +93,10 @@ MAY be non-unique and MAY have different IP addresses.
 A typical payload will look like the following::
 
     {
-        "control": "tcp://10.0.0.1:1234",
-        "depth": "tcp://10.0.0.1:1235"
+        "version": 1,
+        "name": "Bob's Kinect",
+        "endpoints": {
+            "control": "tcp://10.0.0.1:1234",
+            "depth": "tcp://10.0.0.1:1235"
+        }
     }

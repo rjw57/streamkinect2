@@ -39,6 +39,11 @@ class Client(object):
     If *connect_immediately* is *True* then the client attempts to connect when
     constructed. If *False* then :py:meth:`connect` must be used explicitly.
 
+    .. py:attribute:: server_name
+
+        A string giving a human-readable name for the server or *None* if the
+        server has not yet replied to our initial query.
+
     .. py:attribute:: endpoints
 
         A :py:class:`dict` of endpoint addresses keyed by
@@ -51,6 +56,7 @@ class Client(object):
     """
     def __init__(self, control_endpoint, connect_immediately=False, zmq_ctx=None, io_loop=None):
         self.is_connected = False
+        self.server_name = None
         self.endpoints = {
             EndpointType.control: control_endpoint
         }
@@ -99,7 +105,7 @@ class Client(object):
 
         self.is_connected = True
 
-        self._request_endpoints()
+        self._who_me()
 
     def disconnect(self):
         """Explicitly disconnect the client."""
@@ -112,29 +118,38 @@ class Client(object):
 
         self.is_connected = False
 
-    def _request_endpoints(self):
+    def _who_me(self):
         """Request the list of endpoints from the server.
 
         """
         # Handler function
-        def got_endpoints(seq, type, payload):
-            if type != 'endpoints':
-                raise ProtocolError('Expected endpoints list but got "{0}" instead'.format(type))
+        def got_me(seq, type, payload):
+            if type != 'me':
+                raise ProtocolError('Expected me list but got "{0}" instead'.format(type))
+
+            log.info('Received "me" from server')
+
+            if 'version' not in payload or payload['version'] != 1:
+                log.error('me had wrong or missing version')
+                raise ProtocolError('unknown server protocol')
+
+            # Fill in server information
+            self.server_name = payload['name']
 
             # Fill in out endpoint list from payload
-            log.info('Received endpoints from server')
+            endpoints = payload['endpoints']
             for endpoint_type in EndpointType:
                 try:
-                    self.endpoints[endpoint_type] = payload[endpoint_type.name]
+                    self.endpoints[endpoint_type] = endpoints[endpoint_type.name]
                     log.info('Server added "{0.name}" endpoint at "{1}"'.format(
-                        endpoint_type, payload[endpoint_type.name]))
+                        endpoint_type, endpoints[endpoint_type.name]))
                 except KeyError:
                     # Skip endpoints we don't know about
                     pass
 
         # Send packet
-        log.info('Requesting endpoints from server')
-        self._control_send('listEndpoints', recv_cb=got_endpoints)
+        log.info('Requesting server identity')
+        self._control_send('who', recv_cb=got_me)
 
     def _ensure_connected(self):
         if not self.is_connected:

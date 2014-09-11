@@ -169,8 +169,12 @@ class Server(object):
         if type == 'ping':
             log.info('Got ping from client')
             return 'pong', None
-        elif type == 'listEndpoints':
-            return 'endpoints', dict((k.name, v) for k, v in self.endpoints.items())
+        elif type == 'who':
+            return 'me', {
+                'version': 1,
+                'name': self.name,
+                'endpoints': dict((k.name, v) for k, v in self.endpoints.items()),
+            }
         else:
             log.warn('Unknown message type from client: "{0}"'.format(type))
             return 'error', { 'message': 'Unknown message type "{0}"'.format(type) }

@@ -95,6 +95,20 @@ class TestBasicClient(AsyncTestCase):
         # Wait for client to discover the depth endpoint
         self.wait()
 
+    def test_server_name(self):
+        def condition():
+            return self.client.server_name == self.server.name
+
+        def keep_checking():
+            if condition():
+                self.stop()
+            else:
+                self.io_loop.call_later(0.1, keep_checking)
+        self.io_loop.add_callback(keep_checking)
+
+        # Wait for client
+        self.wait()
+
     def test_ping(self):
         def pong():
             log.info('Got pong from server')
