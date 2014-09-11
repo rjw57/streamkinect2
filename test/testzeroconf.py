@@ -29,8 +29,14 @@ class TestDiscovery(AsyncTestCase):
                 if s.name == name:
                     return True
             return False
-        self.stop(True)
-        return self.wait(condition)
+
+        def keep_checking():
+            if condition():
+                self.stop()
+            else:
+                self.io_loop.call_later(0.1, keep_checking)
+        self.io_loop.add_callback(keep_checking)
+        self.wait(condition)
 
     def wait_for_server_remove(self, listener, name):
         def condition():
@@ -38,8 +44,14 @@ class TestDiscovery(AsyncTestCase):
                 if s.name == name:
                     return False
             return True
-        self.stop(True)
-        return self.wait(condition)
+
+        def keep_checking():
+            if condition():
+                self.stop()
+            else:
+                self.io_loop.call_later(0.1, keep_checking)
+        self.io_loop.add_callback(keep_checking)
+        self.wait(condition)
 
     def test_discovery_before_creation(self):
         listener = TestDiscovery.Listener()
@@ -48,7 +60,7 @@ class TestDiscovery(AsyncTestCase):
         with Server(io_loop=self.io_loop) as server:
             log.info('Created server "{0}"'.format(server.name))
 
-            assert self.wait_for_server_add(listener, server.name)
+            self.wait_for_server_add(listener, server.name)
 
             for s in listener.servers:
                 if s.name == server.name:
@@ -56,7 +68,7 @@ class TestDiscovery(AsyncTestCase):
                         s.endpoint, server.endpoints[EndpointType.control]))
                     assert s.endpoint == server.endpoints[EndpointType.control]
 
-        assert self.wait_for_server_remove(listener, server.name)
+        self.wait_for_server_remove(listener, server.name)
 
     def test_discovery_after_creation(self):
         with Server(io_loop=self.io_loop) as server:
@@ -65,7 +77,7 @@ class TestDiscovery(AsyncTestCase):
             listener = TestDiscovery.Listener()
             browser = ServerBrowser(listener, io_loop=self.io_loop)
 
-            assert self.wait_for_server_add(listener, server.name)
+            self.wait_for_server_add(listener, server.name)
 
             for s in listener.servers:
                 if s.name == server.name:
@@ -73,7 +85,7 @@ class TestDiscovery(AsyncTestCase):
                         s.endpoint, server.endpoints[EndpointType.control]))
                     assert s.endpoint == server.endpoints[EndpointType.control]
 
-        assert self.wait_for_server_remove(listener, server.name)
+        self.wait_for_server_remove(listener, server.name)
 
     # Use a ZMQ-compatible I/O loop so that we can use `ZMQStream`.
     def get_new_ioloop(self):
