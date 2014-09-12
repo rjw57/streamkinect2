@@ -7,6 +7,7 @@ import json
 from logging import getLogger
 import functools
 
+import tornado.ioloop
 import zmq
 from zmq.eventloop.zmqstream import ZMQStream
 
@@ -39,6 +40,9 @@ class Client(object):
     If *connect_immediately* is *True* then the client attempts to connect when
     constructed. If *False* then :py:meth:`connect` must be used explicitly.
 
+    *heartbeat_period* is the delay, in milliseconds, between "heartbeat"
+    requests to the server. These are used to ensure the server is still alive.
+
     .. py:attribute:: server_name
 
         A string giving a human-readable name for the server or *None* if the
@@ -54,7 +58,8 @@ class Client(object):
         *True* if the client is connected. *False* otherwise.
 
     """
-    def __init__(self, control_endpoint, connect_immediately=False, zmq_ctx=None, io_loop=None):
+    def __init__(self, control_endpoint, connect_immediately=False, zmq_ctx=None, io_loop=None,
+            heartbeat_period=10000):
         self.is_connected = False
         self.server_name = None
         self.endpoints = {
@@ -73,6 +78,10 @@ class Client(object):
 
         # Callables to handle responses keyed by sequence number
         self._response_handlers = {}
+
+        # Heartbeat callback and period
+        self._heartbeat_period = heartbeat_period
+        self._heartbeat_callback = None
 
         if connect_immediately:
             self.connect()
@@ -106,13 +115,24 @@ class Client(object):
 
         self.is_connected = True
 
+        # Kick off an initial "who-me" request
         self._who_me()
+
+        # Create and start the heartbeat callbacl
+        self._heartbeat_callback = tornado.ioloop.PeriodicCallback(
+                self._who_me, self._heartbeat_period, self._io_loop)
+        self._heartbeat_callback.start()
 
     def disconnect(self):
         """Explicitly disconnect the client."""
         if not self.is_connected:
             log.warn('Client not connected')
             return
+
+        # Stop heartbeat callback
+        if self._heartbeat_callback is not None:
+            self._heartbeat_callback.stop()
+        self._heartbeat_callback = None
 
         # TODO: check if disconnect() on the sockets is necessary
         self._control_stream = None

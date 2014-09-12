@@ -82,13 +82,21 @@ any other value.
 The payload MUST include a field named ``name`` whose value is a string
 representing a human-readable name for the server.
 
-The payload MUST include a field named ``endpoints``. This field's value MUST
-be a JSON object whose fields correspond to endpoint names and whose values
-correspond to ZeroMQ-style endpoint addresses. The client MUST ignore any
-endpoints whose name it does not recognise. The server MAY advertise any
-endpoints it wishes but it MUST include at least a ``control`` endpoint with a
-ZeroMQ address corresponding to the control endpoint. The advertised endpoints
-MAY be non-unique and MAY have different IP addresses.
+The payload MUST include a field named ``endpoints`` whose value is a JSON
+object whose fields correspond to endpoint names and whose values correspond to
+ZeroMQ-style endpoint addresses. The client MUST ignore any endpoints whose
+name it does not recognise. The server MAY advertise any endpoints it wishes
+but it MUST include at least a ``control`` endpoint with a ZeroMQ address
+corresponding to the control endpoint. The advertised endpoints MAY be
+non-unique and MAY have different IP addresses.
+
+The payload MUST include a field named ``devices`` whose value is a JSON array
+of device records. A device record is a JSON object. A device record MUST
+include a field named ``id`` whose value is a string giving a unique name for a
+Kinect connected to the server. A device record MUST include a field named
+``endpoints`` whose value takes the same format (but not necessarily the same
+value) as the ``endpoints`` object in the payload. This ``endpoints`` object
+gives endpoints which are specific to a particular device.
 
 A typical payload will look like the following::
 
@@ -97,6 +105,14 @@ A typical payload will look like the following::
         "name": "Bob's Kinect",
         "endpoints": {
             "control": "tcp://10.0.0.1:1234",
-            "depth": "tcp://10.0.0.1:1235"
-        }
+            "events": "tcp://10.0.0.1:1235"
+        },
+        "devices": [
+            {
+                "id": "123456789abcdefghijklmnopqrstuv",
+                "endpoints": {
+                    "depth": "tcp://10.0.0.1:1236"
+                }
+            }
+        ],
     }
