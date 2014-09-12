@@ -1,7 +1,10 @@
+from io import BytesIO
+
 from blinker import Signal
 
 import lz4
 import numpy as np
+from PIL import Image
 
 class DepthFrameCompressor(object):
     """
@@ -21,5 +24,13 @@ class DepthFrameCompressor(object):
         self.last_frame = None
 
     def _on_depth_frame(self, kinect, depth_frame):
-        compressed_frame = lz4.dumps(bytes(depth_frame.data))
+        d = np.frombuffer(depth_frame.data, dtype=np.uint16).reshape(
+                depth_frame.shape[::-1], order='C')
+        d = (d>>4).astype(np.uint8)
+        d_im = Image.fromarray(d)
+
+        bio = BytesIO()
+        d_im.save(bio, 'jpeg')
+
+        compressed_frame = bio.getvalue()
         self.on_compressed_frame.send(self, compressed_frame=compressed_frame)

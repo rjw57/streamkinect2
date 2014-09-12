@@ -31,6 +31,7 @@ setup(
         'enum34',
         'lz4',
         'numpy',
+        'pillow',
         'pyzmq',
         'tornado',
         'zeroconf',
