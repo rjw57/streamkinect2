@@ -23,7 +23,10 @@ def main():
     print('Running compressed pipeline for {0} seconds...'.format(wait_time))
     packets = []
     with MockKinect() as kinect:
-        fc = DepthFrameCompresser(lambda p: packets.append(p), kinect)
+        fc = DepthFrameCompresser(kinect)
+        @fc.on_compressed_frame.connect_via(fc)
+        def new_compressed_frame(_, compressed_frame):
+            packets.append(compressed_frame)
         then = time.time()
         time.sleep(5)
         now = time.time()

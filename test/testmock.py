@@ -31,10 +31,12 @@ def wait_for_frames(kinect, min_count, timeout):
 
 def wait_for_and_compress_frames(kinect, min_count, timeout):
     compressed = []
-    def new_compressed_frame(c):
-        compressed.append(c)
 
-    fc = DepthFrameCompresser(new_compressed_frame, kinect)
+    fc = DepthFrameCompresser(kinect)
+    @fc.on_compressed_frame.connect_via(fc)
+    def new_compressed_frame(_, compressed_frame):
+        compressed.append(compressed_frame)
+
     start = time.time()
     while len(compressed) < min_count and time.time() < start + timeout:
         time.sleep(0.1)
