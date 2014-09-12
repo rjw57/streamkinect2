@@ -59,7 +59,7 @@ class TestDiscovery(AsyncTestCase):
         browser = ServerBrowser(io_loop=self.io_loop)
         listener = TestDiscovery.Listener(browser)
 
-        with Server(io_loop=self.io_loop) as server:
+        with Server(io_loop=self.io_loop, address='127.0.0.1') as server:
             log.info('Created server "{0}"'.format(server.name))
 
             self.wait_for_server_add(listener, server.name)
@@ -73,7 +73,7 @@ class TestDiscovery(AsyncTestCase):
         self.wait_for_server_remove(listener, server.name)
 
     def test_discovery_after_creation(self):
-        with Server(io_loop=self.io_loop) as server:
+        with Server(io_loop=self.io_loop, address='127.0.0.1') as server:
             log.info('Created server "{0}"'.format(server.name))
 
             browser = ServerBrowser(io_loop=self.io_loop)

@@ -11,25 +11,25 @@ from streamkinect2.mock import MockKinect
 log = getLogger(__name__)
 
 def test_no_server_start():
-    s = Server(start_immediately=False)
+    s = Server(start_immediately=False, address='127.0.0.1')
     assert not s.is_running
 
 def test_server_start():
-    s = Server(start_immediately=True)
+    s = Server(start_immediately=True, address='127.0.0.1')
     assert s.is_running
     s.stop()
     assert not s.is_running
 
 def test_server_with_statement():
     s_copy = None
-    with Server() as s:
+    with Server(address='127.0.0.1') as s:
         assert s.is_running
     assert not s.is_running
 
 class TestServer(AsyncTestCase):
     def setUp(self):
         super(TestServer, self).setUp()
-        self.server = Server(io_loop=self.io_loop)
+        self.server = Server(io_loop=self.io_loop, address='127.0.0.1')
 
     def tearDown(self):
         super(TestServer, self).tearDown()

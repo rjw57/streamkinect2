@@ -19,7 +19,7 @@ class TestClientConnection(AsyncTestCase):
         super(TestClientConnection, self).setUp()
 
         # Start a server for this client
-        self.server = Server(start_immediately=True, io_loop=self.io_loop)
+        self.server = Server(address='127.0.0.1', start_immediately=True, io_loop=self.io_loop)
         self.endpoint = self.server.endpoints[EndpointType.control]
 
     def tearDown(self):
@@ -59,7 +59,7 @@ class TestBasicClient(AsyncTestCase):
         super(TestBasicClient, self).setUp()
 
         # Start a server for this client
-        self.server = Server(start_immediately=True, io_loop=self.io_loop)
+        self.server = Server(address='127.0.0.1', start_immediately=True, io_loop=self.io_loop)
 
         # Start the client. Use a fast heartbeat to make testing quick
         control_endpoint = self.server.endpoints[EndpointType.control]
