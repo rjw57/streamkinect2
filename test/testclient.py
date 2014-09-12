@@ -87,19 +87,6 @@ class TestBasicClient(AsyncTestCase):
         control_endpoint = self.server.endpoints[EndpointType.control]
         assert self.client.endpoints[EndpointType.control] == control_endpoint
 
-    def test_event_endpoint(self):
-        event_endpoint = self.server.endpoints[EndpointType.event]
-
-        def condition():
-            try:
-                client_event_endpoint = self.client.endpoints[EndpointType.event]
-            except KeyError:
-                return False
-            return client_event_endpoint == event_endpoint
-
-        self.keep_checking(condition)
-        self.wait()
-
     def test_device_before_connect(self):
         self.server.add_kinect(MockKinect())
         self.keep_checking(lambda: len(self.client.kinect_ids) == 1)
