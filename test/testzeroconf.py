@@ -12,16 +12,18 @@ log = getLogger(__name__)
 
 class TestDiscovery(AsyncTestCase):
     class Listener(object):
-        def __init__(self):
+        def __init__(self, browser):
             self.servers = set()
+            browser.on_add_server.connect(self.add_server, sender=browser)
+            browser.on_remove_server.connect(self.remove_server, sender=browser)
 
-        def add_server(self, info):
-            log.info('Listener told to add server: {0}'.format(info))
-            self.servers.add(info)
+        def add_server(self, browser, server_info):
+            log.info('Listener told to add server: {0}'.format(server_info))
+            self.servers.add(server_info)
 
-        def remove_server(self, info):
-            log.info('Listener told to remove server: {0}'.format(info))
-            self.servers.remove(info)
+        def remove_server(self, browser, server_info):
+            log.info('Listener told to remove server: {0}'.format(server_info))
+            self.servers.remove(server_info)
 
     def wait_for_server_add(self, listener, name):
         def condition():
@@ -54,8 +56,8 @@ class TestDiscovery(AsyncTestCase):
         self.wait(condition)
 
     def test_discovery_before_creation(self):
-        listener = TestDiscovery.Listener()
-        browser = ServerBrowser(listener, io_loop=self.io_loop)
+        browser = ServerBrowser(io_loop=self.io_loop)
+        listener = TestDiscovery.Listener(browser)
 
         with Server(io_loop=self.io_loop) as server:
             log.info('Created server "{0}"'.format(server.name))
@@ -74,8 +76,8 @@ class TestDiscovery(AsyncTestCase):
         with Server(io_loop=self.io_loop) as server:
             log.info('Created server "{0}"'.format(server.name))
 
-            listener = TestDiscovery.Listener()
-            browser = ServerBrowser(listener, io_loop=self.io_loop)
+            browser = ServerBrowser(io_loop=self.io_loop)
+            listener = TestDiscovery.Listener(browser)
 
             self.wait_for_server_add(listener, server.name)
 

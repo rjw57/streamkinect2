@@ -19,11 +19,17 @@ log = logging.getLogger(__name__)
 
 # Our listening class
 class Listener(object):
-    def __init__(self, io_loop = None):
+    def __init__(self, browser, io_loop = None):
         self.clients = {}
         self.io_loop = io_loop or IOLoop.instance()
+        browser.on_add_server.connect(self.add_server, sender=browser)
+        browser.on_remove_server.connect(self.remove_server, sender=browser)
 
-    def add_server(self, server_info):
+        # Keep a reference to browser since we remain interested and do not
+        # wish it garbage collected.
+        self.browser = browser
+
+    def add_server(self, browser, server_info):
         log.info('Discovered server "{0.name}" at "{0.endpoint}"'.format(server_info))
 
         client = Client(server_info.endpoint, connect_immediately=True)
@@ -37,14 +43,14 @@ class Listener(object):
         log.info('Pinging server "{0.name}"...'.format(server_info))
         client.ping(pong)
 
-    def remove_server(self, server_info):
+    def remove_server(self, browser, server_info):
         log.info('Server "{0.name}" at "{0.endpoint}" went away'.format(server_info))
 
 class IOLoopThread(threading.Thread):
     def run(self):
         # Create the server browser
         log.info('Creating server browser...')
-        browser = ServerBrowser(Listener())
+        listener = Listener(ServerBrowser())
 
         # Run the ioloop
         log.info('Running...')
