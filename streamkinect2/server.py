@@ -106,9 +106,6 @@ class Server(object):
         self._streams = {}
         self._io_loop = io_loop
 
-        # state for sending events
-        self._event_sequence = 0
-
         # kinects which we manage. Keyed by device id.
         self._kinects = { }
 
@@ -162,7 +159,6 @@ class Server(object):
         # Create zeromq sockets
         endpoints_to_create = [
             (zmq.REP, EndpointType.control),
-            (zmq.PUB, EndpointType.event),
         ]
         for type, key in endpoints_to_create:
             self._streams[key], self.endpoints[key] = self._create_and_bind_socket(type)
@@ -205,9 +201,6 @@ class Server(object):
 
         self.is_running = False
 
-    def _on_me_changed(self):
-        self._event_send(self._current_me())
-
     def _current_me(self):
         devices = []
         for device in self._kinects.values():
@@ -222,11 +215,6 @@ class Server(object):
             'endpoints': dict((k.name, v) for k, v in self.endpoints.items()),
             'devices': devices,
         }
-
-    def _event_send(self, type, payload):
-        self._event_sequence += 1
-        msg = { 'seq': self._event_sequence, 'type': type, 'payload': payload }
-        self._streams[EndpointType.event].send_json(msg)
 
     def _handle_control(self, type, payload):
         """Handle a control message. Return a pair giving the type and payload of the response."""

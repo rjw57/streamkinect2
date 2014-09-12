@@ -104,8 +104,7 @@ A typical payload will look like the following::
         "version": 1,
         "name": "Bob's Kinect",
         "endpoints": {
-            "control": "tcp://10.0.0.1:1234",
-            "events": "tcp://10.0.0.1:1235"
+            "control": "tcp://10.0.0.1:1234"
         },
         "devices": [
             {
