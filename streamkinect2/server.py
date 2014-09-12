@@ -294,11 +294,11 @@ class ServerBrowser(object):
     continue to receive notification of servers, you should keep it around.
 
     *io_loop* is an instance of :py:class:`tornado.ioloop.IOLoop` which should
-    be used to schedule callback events on the listener. If *None* then the
-    global instance is used. This is needed because server discovery happens on
-    a separate thread to the tornado event loop which is used for the rest of
-    the network communication. Hence, when a server is discovered, the browser
-    co-ordinates with the event loop to call the :py:meth:`add_server` and
+    be used to schedule sending signals. If *None* then the global instance is
+    used. This is needed because server discovery happens on a separate thread
+    to the tornado event loop which is used for the rest of the network
+    communication. Hence, when a server is discovered, the browser co-ordinates
+    with the event loop to call the :py:meth:`add_server` and
     :py:meth:`remove_server` methods on the main IOLoop thread.
 
     *address* is an explicit bind IP address for an interface to listen on as a
