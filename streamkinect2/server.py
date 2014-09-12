@@ -16,6 +16,7 @@ import zmq
 from zmq.eventloop.zmqstream import ZMQStream
 
 from .common import EndpointType
+from .compress import DepthFrameCompresser
 
 # Global zeroconf object pool keyed by bind address
 _ZC_POOL = {}
@@ -48,7 +49,8 @@ class ServerInfo(namedtuple('ServerInfo', ['name', 'endpoint'])):
         :py:class:`streamkinect2.client.Client`.
     """
 
-class _KinectRecord(namedtuple('_KinectRecord', ['kinect', 'endpoints', 'streams'])):
+class _KinectRecord(namedtuple('_KinectRecord',
+        ['kinect', 'endpoints', 'streams', 'depth_compresser'])):
     pass
 
 class Server(object):
@@ -150,11 +152,25 @@ class Server(object):
         for type, key in endpoints_to_create:
             streams[key], endpoints[key] = self._create_and_bind_socket(type)
 
-        self._kinects[kinect.unique_kinect_id] = _KinectRecord(kinect, endpoints, streams)
+        depth_compresser = DepthFrameCompresser(kinect)
+        self._kinects[kinect.unique_kinect_id] = _KinectRecord(kinect, endpoints,
+                streams, depth_compresser)
+
+        # Register our interest in compressed frames
+        DepthFrameCompresser.on_compressed_frame.connect(
+                self._on_compressed_frame, sender=depth_compresser)
 
     def remove_kinect(self, kinect):
         """Remove a Kinect device previously added via :py:meth:`add_kinect`."""
+        # Find this kinect's record
+        record = self._kinects[kinect.unique_kinect_id]
+
+        # Remove it from the list
         del self._kinects[kinect.unique_kinect_id]
+
+        # Disconnect signal handlers
+        DepthFrameCompresser.on_compressed_frame.disconnect(
+                self._on_compressed_frame, sender=record.depth_compresser)
 
     @property
     def kinects(self):
@@ -287,6 +303,16 @@ class Server(object):
         self._streams[EndpointType.control].send_json(
             { 'seq': seq, 'type': r_type, 'payload': r_payload }
         )
+
+    def _on_compressed_frame(self, depth_compresser, compressed_frame):
+        kinect_id = depth_compresser.kinect.unique_kinect_id
+        try:
+            record = self._kinects[kinect_id]
+        except KeyError:
+            log.warn('Got depth from from unknown kinect "{0}"'.format(kinect_id))
+
+        # Send data to clients
+        record.streams[EndpointType.depth].send_multipart(compressed_frame)
 
 class ServerBrowser(object):
     """An object which listens for kinect2 streaming servers on the network.

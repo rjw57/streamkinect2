@@ -3,6 +3,12 @@ from blinker import Signal
 import lz4
 
 class DepthFrameCompresser(object):
+    """
+    .. py:attribute:: kinect
+
+        Kinect object associated with this compressor.
+    """
+
     on_compressed_frame = Signal()
     """Signal emitted when a new compressed frame is available. Receivers take
     a single keyword argument, *compressed_frame*, which is a sequence of
@@ -10,6 +16,7 @@ class DepthFrameCompresser(object):
 
     def __init__(self, kinect):
         kinect.on_depth_frame.connect(self._on_depth_frame, sender=kinect)
+        self.kinect = kinect
 
     def _on_depth_frame(self, kinect, depth_frame):
         self.on_compressed_frame.send(self, compressed_frame=[lz4.dumps(depth_frame.data),])

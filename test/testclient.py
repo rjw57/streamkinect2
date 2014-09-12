@@ -103,6 +103,34 @@ class TestBasicClient(AsyncTestCase):
         self.keep_checking(lambda: len(self.client.kinect_ids) == 1)
         self.wait()
 
+    def test_add_signal_device_after_connect(self):
+        self.keep_checking(lambda: self.client.server_name is not None)
+        self.wait()
+
+        k = MockKinect()
+
+        state = { 'n_kinect_added': 0, 'n_kinect_removed': 0 }
+
+        @self.client.on_add_kinect.connect_via(self.client)
+        def on_add(client, kinect_id):
+            log.info('Add kinect {0}'.format(kinect_id))
+            assert kinect_id == k.unique_kinect_id
+            state['n_kinect_added'] += 1
+
+        @self.client.on_remove_kinect.connect_via(self.client)
+        def on_add(client, kinect_id):
+            log.info('Remove kinect {0}'.format(kinect_id))
+            assert kinect_id == k.unique_kinect_id
+            state['n_kinect_removed'] += 1
+
+        self.server.add_kinect(k)
+        self.keep_checking(lambda: state['n_kinect_added'] == 1)
+        self.wait()
+
+        self.server.remove_kinect(k)
+        self.keep_checking(lambda: state['n_kinect_removed'] == 1)
+        self.wait()
+
     def test_server_name(self):
         def condition():
             return self.client.server_name == self.server.name
@@ -129,6 +157,31 @@ class TestBasicClient(AsyncTestCase):
 
         self.keep_checking(lambda: state['n_pongs'] == state['n_pings'])
         self.wait()
+
+    @raises(ValueError)
+    def test_cannot_receive_depth_frames_from_bad_device(self):
+        k = MockKinect()
+        self.client.enable_depth_frames(k.unique_kinect_id)
+
+    def test_receives_depth_frames(self):
+        k = MockKinect()
+
+        state = { 'n_depth_frames': 0 }
+        @self.client.on_depth_frame.connect_via(self.client)
+        def on_depth_frame(client, depth_frame, kinect_id):
+            assert k.unique_kinect_id == kinect_id
+            state['n_depth_frames'] += 1
+
+        @self.client.on_add_kinect.connect_via(self.client)
+        def on_add_kinect(client, kinect_id):
+            assert client == self.client
+            assert kinect_id == k.unique_kinect_id
+            client.enable_depth_frames(kinect_id)
+
+        with k:
+            self.server.add_kinect(k)
+            self.keep_checking(lambda: state['n_depth_frames'] > 1)
+            self.wait()
 
     # Use a ZMQ-compatible I/O loop so that we can use `ZMQStream`.
     def get_new_ioloop(self):

@@ -3,10 +3,12 @@ Client
 ======
 
 """
+from collections import namedtuple
 import json
 from logging import getLogger
 import functools
 
+from blinker import Signal
 import tornado.ioloop
 import zmq
 from zmq.eventloop.zmqstream import ZMQStream
@@ -58,6 +60,24 @@ class Client(object):
         *True* if the client is connected. *False* otherwise.
 
     """
+
+    on_add_kinect = Signal()
+    """A signal which is emitted when a new kinect device is available. Handlers
+    should accept a single keyword argument *kinect_id* which is the unique id
+    associated with the new device."""
+
+    on_remove_kinect = Signal()
+    """A signal which is emitted when a kinect device is removed. Handlers
+    should accept a single keyword argument *kinect_id* which is the unique id
+    associated with the new device."""
+
+    on_depth_frame = Signal()
+    """A signal which is emitted when a new depth frame is available. Handlers
+    should accept two keyword arguments: *depth_frame* which will be an
+    instance of an object with the same interface as :py:class:`DepthFrame` and
+    *kinect_id* which will be the unique id of the kinect device producing the
+    depth frame."""
+
     def __init__(self, control_endpoint, connect_immediately=False, zmq_ctx=None, io_loop=None,
             heartbeat_period=10000):
         self.is_connected = False
@@ -65,7 +85,6 @@ class Client(object):
         self.endpoints = {
             EndpointType.control: control_endpoint
         }
-        self.kinect_ids = []
 
         if zmq_ctx is None:
             zmq_ctx = zmq.Context.instance()
@@ -83,8 +102,15 @@ class Client(object):
         self._heartbeat_period = heartbeat_period
         self._heartbeat_callback = None
 
+        # Dictionary of device records keyed by id
+        self._kinect_records = {}
+
         if connect_immediately:
             self.connect()
+
+    @property
+    def kinect_ids(self):
+        return list(self._kinect_records.keys())
 
     def ping(self, pong_cb=None):
         """Send a 'ping' request to the server. If *pong_cb* is not *None*, it
@@ -99,6 +125,34 @@ class Client(object):
                 pong_cb()
 
         self._control_send('ping', recv_cb=pong)
+
+    def enable_depth_frames(self, kinect_id):
+        """Enable streaming of depth frames. *kinect_id* is the id of the
+        device which should have streaming enabled.
+
+        :raises ValueError: if *kinect_id* does not correspond to a connected device
+
+        """
+        try:
+           record = self._kinect_records[kinect_id]
+        except KeyError:
+            raise ValueError('Kinect id "{0}" does not correspond to a connected device'.format(
+                kinect_id))
+
+        # Create subscriber stream
+        socket = self._zmq_ctx.socket(zmq.SUB)
+        socket.connect(record.endpoints[EndpointType.depth])
+        socket.setsockopt_string(zmq.SUBSCRIBE, '')
+        stream = ZMQStream(socket, self._io_loop)
+        record.streams[EndpointType.depth] = stream
+
+        # Fire signal on incoming depth frame
+        def on_recv(msg, kinect_id=kinect_id):
+            # TODO: decompress frame
+            self.on_depth_frame.send(self, kinect_id=kinect_id, depth_frame=None)
+
+        # Wire up callback
+        stream.on_recv(on_recv)
 
     def connect(self):
         """Explicitly connect the client."""
@@ -139,6 +193,8 @@ class Client(object):
 
         self.is_connected = False
 
+    _KinectRecord = namedtuple('_KinectRecord', ['endpoints', 'streams'])
+
     def _who_me(self):
         """Request the list of endpoints from the server.
 
@@ -158,11 +214,47 @@ class Client(object):
             self.server_name = payload['name']
             log.info('Server identifies itself as "{0}"'.format(self.server_name))
 
+            # Remember the old kinect ids
+            old_kinect_ids = set(self._kinect_records.keys())
+
             # Extract kinects
             devices = payload['devices']
-            self.kinect_ids = list(d['id'] for d in devices)
+            new_records = {}
+            for device in devices:
+                # Fetch or create the record for this device
+                try:
+                    record = self._kinect_records[device['id']]
+                except KeyError:
+                    record = Client._KinectRecord(endpoints={}, streams={})
+                new_records[device['id']] = record
 
-            # Fill in out endpoint list from payload
+                # Fill in endpoint and stream dictionaries for device
+                for ep_type in EndpointType:
+                    # See if this endpoint is in the payload
+                    ep = None
+                    try:
+                        ep = device['endpoints'][ep_type.name]
+                    except KeyError:
+                        pass
+
+                    if ep is None and ep_type in record.endpoints:
+                        # Endpoint has gone away but was there
+                        del record.endpoints[ep_type]
+                        del record.streams[ep_type]
+                    elif ep is not None:
+                        # Is this a new or changed endpoint endpoint?
+                        if ep_type not in record.endpoints or record.endpoints[ep_type] != ep:
+                            # Record new/changed endpoint
+                            record.endpoints[ep_type] = ep
+
+                            # Initially there are no streams for any endpoint to avoid
+                            # subscribing to services we do not need.
+                            record.streams[ep_type] = None
+
+            # Update kinect records
+            self._kinect_records = new_records
+
+            # Fill in out server endpoint list from payload
             endpoints = payload['endpoints']
             for endpoint_type in EndpointType:
                 try:
@@ -172,6 +264,17 @@ class Client(object):
                 except KeyError:
                     # Skip endpoints we don't know about
                     pass
+
+            # Send {add,remove}_kinect events...
+            new_kinect_ids = set(self._kinect_records.keys())
+
+            # ... for devices in new list and not in old
+            for k_id in new_kinect_ids.difference(old_kinect_ids):
+                self.on_add_kinect.send(self, kinect_id=k_id)
+
+            # ... for devices in old list and not in new
+            for k_id in old_kinect_ids.difference(new_kinect_ids):
+                self.on_remove_kinect.send(self, kinect_id=k_id)
 
         # Send packet
         log.info('Requesting server identity')
