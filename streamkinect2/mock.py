@@ -24,12 +24,18 @@ def _make_mock(frame_shape):
             (ys-(frame_shape[0]>>1))*(ys-(frame_shape[0]>>1))) + 500
     return wall.astype(np.uint16), sphere.astype(np.uint16)
 
-class DepthFrame(namedtuple('DepthFrame', ('data',))):
+class DepthFrame(namedtuple('DepthFrame', ('data', 'shape'))):
     """A single frame of depth data.
 
     .. py:attribute:: data
 
-        Python buffer-like object pointing to raw frame data.
+        Python buffer-like object pointing to raw frame data as a C-ordered
+        array of uint16.
+
+    .. pt:attribute:: shape
+
+        Pair giving the width and height of the depth frame.
+
     """
 
 class MockKinect(threading.Thread):
@@ -103,7 +109,8 @@ class MockKinect(threading.Thread):
             then = time.time()
             dx = int(np.sin(then) * 100)
             df = np.minimum(self._wall, np.roll(self._sphere, dx, 1))
-            depth_frame = DepthFrame(data=bytes(df.data))
+            df = np.asarray(df, order='C', dtype=np.uint16)
+            depth_frame = DepthFrame(data=bytes(df.data), shape=df.shape[::-1])
             self.on_depth_frame.send(self, depth_frame=depth_frame)
             now = time.time()
 

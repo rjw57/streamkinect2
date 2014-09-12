@@ -1,6 +1,7 @@
 from blinker import Signal
 
 import lz4
+import numpy as np
 
 class DepthFrameCompressor(object):
     """
@@ -17,6 +18,8 @@ class DepthFrameCompressor(object):
     def __init__(self, kinect):
         kinect.on_depth_frame.connect(self._on_depth_frame, sender=kinect)
         self.kinect = kinect
+        self.last_frame = None
 
     def _on_depth_frame(self, kinect, depth_frame):
-        self.on_compressed_frame.send(self, compressed_frame=lz4.dumps(depth_frame.data))
+        compressed_frame = lz4.dumps(bytes(depth_frame.data))
+        self.on_compressed_frame.send(self, compressed_frame=compressed_frame)
