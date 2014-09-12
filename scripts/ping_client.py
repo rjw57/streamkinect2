@@ -31,6 +31,7 @@ class Listener(object):
 
         def pong(server_info=server_info):
             log.info('Got pong from "{0.name}"'.format(server_info))
+            self.clients[server_info.endpoint].disconnect()
             del self.clients[server_info.endpoint]
 
         log.info('Pinging server "{0.name}"...'.format(server_info))
