@@ -142,7 +142,7 @@ class Client(object):
         # Create subscriber stream
         socket = self._zmq_ctx.socket(zmq.SUB)
         socket.connect(record.endpoints[EndpointType.depth])
-        socket.setsockopt_string(zmq.SUBSCRIBE, '')
+        socket.setsockopt_string(zmq.SUBSCRIBE, u'')
         stream = ZMQStream(socket, self._io_loop)
         record.streams[EndpointType.depth] = stream
 
