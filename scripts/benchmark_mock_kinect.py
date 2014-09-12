@@ -31,7 +31,7 @@ def main():
         time.sleep(5)
         now = time.time()
     delta = now - then
-    data_size = sum(sum(len(m) for m in p) for p in packets)
+    data_size = sum(len(p) for p in packets)
     data_rate = float(data_size) / delta # bytes/sec
     pps = len(packets) / delta
     print('Mock kinect runs at {0:.2f} packets/second w/ compression'.format(pps))

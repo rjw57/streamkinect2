@@ -79,7 +79,7 @@ class TestMock:
         with self.kinect as kinect:
             packets, t = wait_for_and_compress_frames(kinect, 1024, 2.0)
         log.info('Got {0} compressed packets in {1:.2f} seconds'.format(len(packets), t))
-        size = sum(sum(len(x) for x in y) for y in packets)
+        size = sum(len(y) for y in packets)
         data_rate = (float(size) / t) / (1024*1024)
         log.info('Total size is {0} bytes => {1:.2f} Mbytes/s'.format(size, data_rate))
         assert data_rate < 80 * 1024 * 1024
