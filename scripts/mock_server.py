@@ -7,6 +7,7 @@ import logging
 import threading
 
 from streamkinect2.server import Server
+from streamkinect2.mock import MockKinect
 
 # Install the zmq ioloop
 from zmq.eventloop import ioloop
@@ -19,11 +20,19 @@ class IOLoopThread(threading.Thread):
     def run(self):
         # Create the server
         log.info('Creating server')
-        with Server():
+        server = Server()
+
+        # Add mock kinect device to server
+        server.add_kinect(MockKinect())
+
+        # With the server running...
+        log.info('Running server...')
+        with server:
             # Run the ioloop
-            log.info('Running server...')
             ioloop.IOLoop.instance().start()
-        log.info('Stopping')
+
+        # The server has now stopped
+        log.info('Stopped')
 
     def stop(self):
         io_loop = ioloop.IOLoop.instance()
