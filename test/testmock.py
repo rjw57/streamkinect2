@@ -7,12 +7,7 @@ import time
 
 log = getLogger(__name__)
 
-# Importing mock can fail if numpy is not installed
-try:
-    import streamkinect2.mock as mock
-except:
-    mock = None
-
+import streamkinect2.mock as mock
 from streamkinect2.compress import DepthFrameCompresser
 
 # This is intentionally low to not be too hard on the test server. Use a
