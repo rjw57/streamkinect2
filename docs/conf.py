@@ -16,6 +16,8 @@
 import sys
 import os
 
+# Add root dir to path so that we can import streamkinect2 version data
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import streamkinect2.version as meta
 
 # Docs can be built with mock modules
@@ -26,7 +28,7 @@ class Mock(MagicMock):
     def __getattr__(cls, name):
             return Mock()
 
-MOCK_MODULES = ['numpy','lz4','pyzmq','tornado','zeroconf']
+MOCK_MODULES = ['numpy','lz4',]
 sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
 
 # If extensions (or modules to document with autodoc) are in another directory,
