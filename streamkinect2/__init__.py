@@ -4,7 +4,7 @@ Event handling
 ==============
 
 Some :py:mod:`streamkinect2` object emit events. The `blinker
-<https://pythonhosted.org/blinker/>` library is used to handle signals. See the
+<https://pythonhosted.org/blinker/>`_ library is used to handle signals. See the
 blinker documentation for full details. As an example, here is how to register
 an event handler for a new depth frame from a
 :py:class:`streamkinect2.mock.MockKinect` object::
