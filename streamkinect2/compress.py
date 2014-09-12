@@ -2,7 +2,7 @@ from blinker import Signal
 
 import lz4
 
-class DepthFrameCompresser(object):
+class DepthFrameCompressor(object):
     """
     .. py:attribute:: kinect
 

@@ -16,7 +16,7 @@ import zmq
 from zmq.eventloop.zmqstream import ZMQStream
 
 from .common import EndpointType
-from .compress import DepthFrameCompresser
+from .compress import DepthFrameCompressor
 
 # Global zeroconf object pool keyed by bind address
 _ZC_POOL = {}
@@ -152,12 +152,12 @@ class Server(object):
         for type, key in endpoints_to_create:
             streams[key], endpoints[key] = self._create_and_bind_socket(type)
 
-        depth_compresser = DepthFrameCompresser(kinect)
+        depth_compresser = DepthFrameCompressor(kinect)
         self._kinects[kinect.unique_kinect_id] = _KinectRecord(kinect, endpoints,
                 streams, depth_compresser)
 
         # Register our interest in compressed frames
-        DepthFrameCompresser.on_compressed_frame.connect(
+        DepthFrameCompressor.on_compressed_frame.connect(
                 self._on_compressed_frame, sender=depth_compresser)
 
     def remove_kinect(self, kinect):
@@ -169,7 +169,7 @@ class Server(object):
         del self._kinects[kinect.unique_kinect_id]
 
         # Disconnect signal handlers
-        DepthFrameCompresser.on_compressed_frame.disconnect(
+        DepthFrameCompressor.on_compressed_frame.disconnect(
                 self._on_compressed_frame, sender=record.depth_compresser)
 
     @property

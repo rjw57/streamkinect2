@@ -2,7 +2,7 @@ from logging import getLogger
 import time
 
 from streamkinect2.mock import MockKinect
-from streamkinect2.compress import DepthFrameCompresser
+from streamkinect2.compress import DepthFrameCompressor
 
 def main():
     wait_time = 5
@@ -23,7 +23,7 @@ def main():
     print('Running compressed pipeline for {0} seconds...'.format(wait_time))
     packets = []
     with MockKinect() as kinect:
-        fc = DepthFrameCompresser(kinect)
+        fc = DepthFrameCompressor(kinect)
         @fc.on_compressed_frame.connect_via(fc)
         def new_compressed_frame(_, compressed_frame):
             packets.append(compressed_frame)

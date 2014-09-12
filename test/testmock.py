@@ -8,7 +8,7 @@ import time
 log = getLogger(__name__)
 
 import streamkinect2.mock as mock
-from streamkinect2.compress import DepthFrameCompresser
+from streamkinect2.compress import DepthFrameCompressor
 
 # This is intentionally low to not be too hard on the test server. Use a
 # benchmark script if you want to get a better idea of performance.
@@ -32,7 +32,7 @@ def wait_for_frames(kinect, min_count, timeout):
 def wait_for_and_compress_frames(kinect, min_count, timeout):
     compressed = []
 
-    fc = DepthFrameCompresser(kinect)
+    fc = DepthFrameCompressor(kinect)
     @fc.on_compressed_frame.connect_via(fc)
     def new_compressed_frame(_, compressed_frame):
         compressed.append(compressed_frame)
