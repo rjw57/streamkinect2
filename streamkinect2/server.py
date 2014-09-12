@@ -75,6 +75,9 @@ class Server(object):
     :py:class:`zmq.eventloop.zmqstream.ZMQStream` used to communicate with the
     cleint. If *None* then global IOLoop instance is used.
 
+    If *announce* is True then the server will be announced over ZeroConf when
+    it starts running.
+
     .. py:attribute:: address
 
         The address bound to as a decimal-dotted string.
@@ -93,7 +96,8 @@ class Server(object):
         :py:class:`list` of kinect devices managed by this server. See :py:meth:`add_kinect`.
 
     """
-    def __init__(self, address=None, start_immediately=False, name=None, zmq_ctx=None, io_loop=None):
+    def __init__(self, address=None, start_immediately=False,
+            name=None, zmq_ctx=None, io_loop=None, announce=True):
         # Choose a sensible name if none is specified
         if name is None:
             import getpass
@@ -110,6 +114,8 @@ class Server(object):
         self.name = name
         self.address = address
         self.endpoints = {}
+
+        self._announce = announce
 
         # zmq streams for each endpoint
         self._streams = {}
@@ -184,9 +190,10 @@ class Server(object):
             address=socket.inet_aton(self.address), port=control_port,
             properties={})
 
-        # register ourselves with zeroconf
-        log.info('Registering server "{0}" with Zeroconf'.format(self.name))
-        self._zc.registerService(self._zc_info)
+        if self._announce:
+            # register ourselves with zeroconf
+            log.info('Registering server "{0}" with Zeroconf'.format(self.name))
+            self._zc.registerService(self._zc_info)
 
         self.is_running = True
 
@@ -199,9 +206,10 @@ class Server(object):
             log.warn('Server already stopped')
             return
 
-        # unregister ourselves with zeroconf
-        log.info('Unregistering server "{0}" with Zeroconf'.format(self.name))
-        self._zc.unregisterService(self._zc_info)
+        if self._announce:
+            # unregister ourselves with zeroconf
+            log.info('Unregistering server "{0}" with Zeroconf'.format(self.name))
+            self._zc.unregisterService(self._zc_info)
 
         # close the sockets
         for s in self._streams.values():
