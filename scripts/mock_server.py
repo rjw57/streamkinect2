@@ -23,11 +23,12 @@ class IOLoopThread(threading.Thread):
         server = Server()
 
         # Add mock kinect device to server
-        server.add_kinect(MockKinect())
+        kinect = MockKinect()
+        server.add_kinect(kinect)
 
-        # With the server running...
+        # With the server and kinect running...
         log.info('Running server...')
-        with server:
+        with server, kinect:
             # Run the ioloop
             ioloop.IOLoop.instance().start()
 
