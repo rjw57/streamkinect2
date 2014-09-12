@@ -11,9 +11,9 @@ def main():
     state = { 'n_frames': 0 }
     with MockKinect() as kinect:
         then = time.time()
-        def f(frame):
+        @kinect.on_depth_frame.connect_via(kinect)
+        def f(kinect, depth_frame):
             state['n_frames'] += 1
-        kinect.add_depth_frame_listener(f)
         time.sleep(wait_time)
         now = time.time()
     delta = now - then
@@ -22,12 +22,10 @@ def main():
 
     print('Running compressed pipeline for {0} seconds...'.format(wait_time))
     packets = []
-    fc = DepthFrameCompresser(lambda p: packets.append(p))
     with MockKinect() as kinect:
+        fc = DepthFrameCompresser(lambda p: packets.append(p), kinect)
         then = time.time()
-        kinect.add_depth_frame_listener(fc.add_frame)
         time.sleep(5)
-        kinect.remove_depth_frame_listener(fc.add_frame)
         now = time.time()
     delta = now - then
     data_size = sum(sum(len(m) for m in p) for p in packets)

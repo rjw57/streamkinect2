@@ -21,15 +21,15 @@ TARGET_FPS = 10
 
 def wait_for_frames(kinect, min_count, timeout):
     state = { 'count': 0 }
-    def frame_listener(depth_frame):
+
+    @kinect.on_depth_frame.connect_via(kinect)
+    def frame_listener(kinect, depth_frame):
         state['count'] += 1
 
-    kinect.add_depth_frame_listener(frame_listener)
     start = time.time()
     while state['count'] < min_count and time.time() < start + timeout:
         time.sleep(0.1)
     end = time.time()
-    kinect.remove_depth_frame_listener(frame_listener)
 
     # Return the number of frames received and how long we waited
     return state['count'], (end-start)
@@ -39,14 +39,11 @@ def wait_for_and_compress_frames(kinect, min_count, timeout):
     def new_compressed_frame(c):
         compressed.append(c)
 
-    fc = DepthFrameCompresser(new_compressed_frame)
-
-    kinect.add_depth_frame_listener(fc.add_frame)
+    fc = DepthFrameCompresser(new_compressed_frame, kinect)
     start = time.time()
     while len(compressed) < min_count and time.time() < start + timeout:
         time.sleep(0.1)
     end = time.time()
-    kinect.remove_depth_frame_listener(fc.add_frame)
 
     # Return the packets received and how long we waited
     return compressed, (end-start)

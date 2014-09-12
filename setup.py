@@ -27,6 +27,7 @@ setup(
     ],
 
     install_requires=[
+        'blinker',
         'enum34',
         'lz4',
         'numpy',

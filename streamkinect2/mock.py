@@ -14,6 +14,7 @@ import threading
 import time
 import uuid
 
+from blinker import Signal
 import numpy as np
 
 def _make_mock(frame_shape):
@@ -58,36 +59,22 @@ class MockKinect(threading.Thread):
         A string with an opaque, unique id for this Kinect.
 
     """
+
+    on_depth_frame = Signal()
+    """A signal which is emitted when a new depth frame is available. Handlers
+    should accept a single keyword argument *depth_frame* which will be an
+    instance of :py:class:`DepthFrame`."""
+
     def __init__(self):
         super(MockKinect, self).__init__()
 
         # Invent unique id
         self.unique_kinect_id = uuid.uuid4().hex
 
-        self._depth_listeners = set()
-        self._depth_listeners_lock = threading.Lock()
-
         self._frame_shape = (1080, 1920)
         self._wall, self._sphere = _make_mock(self._frame_shape)
 
         self._should_stop = False
-
-    def add_depth_frame_listener(self, listener):
-        """Add *listener* as a callable which is called with a
-        :py:class:`DepthFrame`-like object for each depth frame from the
-        camera.
-
-        """
-        with self._depth_listeners_lock:
-            self._depth_listeners.add(listener)
-
-    def remove_depth_frame_listener(self, listener):
-        """Remove *listener* which had previously been added via
-        :py:meth:`add_depth_frame_listener`.
-
-        """
-        with self._depth_listeners_lock:
-            self._depth_listeners.remove(listener)
 
     def __enter__(self):
         self.start()
@@ -117,9 +104,7 @@ class MockKinect(threading.Thread):
             dx = int(np.sin(then) * 100)
             df = np.minimum(self._wall, np.roll(self._sphere, dx, 1))
             depth_frame = DepthFrame(data=bytes(df.data))
-            with self._depth_listeners_lock:
-                for l in self._depth_listeners:
-                    l(depth_frame)
+            self.on_depth_frame.send(self, depth_frame=depth_frame)
             now = time.time()
 
             # HACK: aim for just above 60FPS
