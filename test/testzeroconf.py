@@ -56,7 +56,7 @@ class TestDiscovery(AsyncTestCase):
         self.wait(condition)
 
     def test_discovery_before_creation(self):
-        browser = ServerBrowser(io_loop=self.io_loop)
+        browser = ServerBrowser(io_loop=self.io_loop, address='127.0.0.1')
         listener = TestDiscovery.Listener(browser)
 
         with Server(io_loop=self.io_loop, address='127.0.0.1') as server:
@@ -76,7 +76,7 @@ class TestDiscovery(AsyncTestCase):
         with Server(io_loop=self.io_loop, address='127.0.0.1') as server:
             log.info('Created server "{0}"'.format(server.name))
 
-            browser = ServerBrowser(io_loop=self.io_loop)
+            browser = ServerBrowser(io_loop=self.io_loop, address='127.0.0.1')
             listener = TestDiscovery.Listener(browser)
 
             self.wait_for_server_add(listener, server.name)

@@ -17,8 +17,14 @@ from zmq.eventloop.zmqstream import ZMQStream
 
 from .common import EndpointType
 
-# Create our global zeroconf object
-_ZC = zeroconf.Zeroconf()
+# Global zeroconf object pool keyed by bind address
+_ZC_POOL = {}
+def _get_zeroconf(bindaddress):
+    try:
+        return _ZC_POOL[bindaddress]
+    except KeyError:
+        _ZC_POOL[bindaddress] = zeroconf.Zeroconf(bindaddress)
+        return _ZC_POOL[bindaddress]
 
 # Our Zeroconf service type
 _ZC_SERVICE_TYPE = '_kinect2._tcp.local.'
@@ -94,8 +100,10 @@ class Server(object):
             import platform
             name = 'Kinect {0}'.format(uuid.uuid4())
 
+        # Get a zeroconf instance appropriate to the bind address
+        self._zc = _get_zeroconf(address)
         if address is None:
-            address = _ZC.intf # Is this a private attribute?
+            address = self._zc.intf # Is this a private attribute?
 
         # Set public attributes
         self.is_running = False
@@ -178,7 +186,7 @@ class Server(object):
 
         # register ourselves with zeroconf
         log.info('Registering server "{0}" with Zeroconf'.format(self.name))
-        _ZC.registerService(self._zc_info)
+        self._zc.registerService(self._zc_info)
 
         self.is_running = True
 
@@ -193,7 +201,7 @@ class Server(object):
 
         # unregister ourselves with zeroconf
         log.info('Unregistering server "{0}" with Zeroconf'.format(self.name))
-        _ZC.unregisterService(self._zc_info)
+        self._zc.unregisterService(self._zc_info)
 
         # close the sockets
         for s in self._streams.values():
@@ -285,6 +293,9 @@ class ServerBrowser(object):
     co-ordinates with the event loop to call the :py:meth:`add_server` and
     :py:meth:`remove_server` methods on the main IOLoop thread.
 
+    *address* is an explicit bind IP address for an interface to listen on as a
+    decimal-dotted string or *None* to use the default.
+
     """
     on_add_server = Signal()
     """Signal emitted when a new server is discovered on the network. Receivers
@@ -296,12 +307,12 @@ class ServerBrowser(object):
     should take a single keyword argument, *server_info*, which will be an
     instance of :py:class:`ServerInfo` describing the server."""
 
-    def __init__(self, io_loop=None):
+    def __init__(self, io_loop=None, address=None):
         self._io_loop = io_loop or IOLoop.instance()
 
         # A browser. Note the use of a weak reference to us.
-        self._browser = zeroconf.ServiceBrowser(_ZC, _ZC_SERVICE_TYPE,
-                ServerBrowser._Listener(weakref.ref(self)))
+        self._browser = zeroconf.ServiceBrowser(_get_zeroconf(address),
+                _ZC_SERVICE_TYPE, ServerBrowser._Listener(weakref.ref(self)))
 
     class _Listener(object):
         """Listen for ZeroConf service announcements. The browser object is
