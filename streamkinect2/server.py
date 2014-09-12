@@ -312,7 +312,9 @@ class Server(object):
             log.warn('Got depth from from unknown kinect "{0}"'.format(kinect_id))
 
         # Send data to clients
-        record.streams[EndpointType.depth].send(compressed_frame)
+        stream = record.streams[EndpointType.depth]
+        stream.send(compressed_frame)
+        stream.flush()
 
 class ServerBrowser(object):
     """An object which listens for kinect2 streaming servers on the network.
