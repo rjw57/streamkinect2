@@ -1,3 +1,8 @@
+"""
+Depth frame compression
+=======================
+
+"""
 from io import BytesIO
 
 from blinker import Signal

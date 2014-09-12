@@ -13,5 +13,8 @@ API Reference
 .. automodule:: streamkinect2.client
     :members:
 
+.. automodule:: streamkinect2.compress
+    :members:
+
 .. automodule:: streamkinect2.mock
     :members:
