@@ -4,13 +4,13 @@ Test basic client
 from logging import getLogger
 
 from nose.tools import raises
-from tornado.testing import AsyncTestCase
-from zmq.eventloop.ioloop import ZMQIOLoop
 
 from streamkinect2.client import Client
 from streamkinect2.server import Server
 from streamkinect2.common import EndpointType
 from streamkinect2.mock import MockKinect
+
+from .util import AsyncTestCase
 
 log = getLogger(__name__)
 
@@ -51,10 +51,6 @@ class TestClientConnection(AsyncTestCase):
         client.disconnect()
         assert not client.is_connected
 
-    # Use a ZMQ-compatible I/O loop so that we can use `ZMQStream`.
-    def get_new_ioloop(self):
-        return ZMQIOLoop()
-
 class TestBasicClient(AsyncTestCase):
     def setUp(self):
         super(TestBasicClient, self).setUp()
@@ -68,16 +64,6 @@ class TestBasicClient(AsyncTestCase):
         self.client = Client(control_endpoint,
                 connect_immediately=True, io_loop=self.io_loop,
                 heartbeat_period=250)
-
-    def keep_checking(self, condition):
-        """Perdiodically call *condition*, waiting for it to be true or timeout
-        eventually.
-
-        """
-        if condition():
-            self.stop()
-        else:
-            self.io_loop.call_later(0.1, self.keep_checking, condition)
 
     def tearDown(self):
         super(TestBasicClient, self).tearDown()
@@ -182,7 +168,3 @@ class TestBasicClient(AsyncTestCase):
             self.server.add_kinect(k)
             self.keep_checking(lambda: state['n_depth_frames'] > 1)
             self.wait()
-
-    # Use a ZMQ-compatible I/O loop so that we can use `ZMQStream`.
-    def get_new_ioloop(self):
-        return ZMQIOLoop()
