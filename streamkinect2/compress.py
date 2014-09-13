@@ -54,6 +54,11 @@ class DepthFrameCompressor(object):
         # Wire ourselves up for depth frame events
         kinect.on_depth_frame.connect(self._on_depth_frame, sender=kinect)
 
+    def __del__(self):
+        # As a courtesy, terminate the worker pool to avoid having a sea of
+        # dangling processes.
+        self._pool.terminate()
+
     @classmethod
     def _compress_depth_frame(cls, depth_frame):
         d = np.frombuffer(depth_frame.data, dtype=np.uint16).reshape(
