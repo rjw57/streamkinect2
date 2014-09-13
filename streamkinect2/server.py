@@ -152,7 +152,7 @@ class Server(object):
         for type, key in endpoints_to_create:
             streams[key], endpoints[key] = self._create_and_bind_socket(type)
 
-        depth_compresser = DepthFrameCompressor(kinect)
+        depth_compresser = DepthFrameCompressor(kinect, io_loop=self._io_loop)
         self._kinects[kinect.unique_kinect_id] = _KinectRecord(kinect, endpoints,
                 streams, depth_compresser)
 

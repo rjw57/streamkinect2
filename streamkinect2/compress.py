@@ -6,10 +6,10 @@ Depth frame compression
 from io import BytesIO
 
 from blinker import Signal
-
 import lz4
 import numpy as np
 from PIL import Image
+import tornado.ioloop
 
 class DepthFrameCompressor(object):
     """
@@ -34,9 +34,14 @@ class DepthFrameCompressor(object):
     buffer-like object containing the compressed frame data."""
 
     def __init__(self, kinect, io_loop=None):
-        kinect.on_depth_frame.connect(self._on_depth_frame, sender=kinect)
+        # Public attributes
         self.kinect = kinect
-        self.last_frame = None
+
+        # Private attributes
+        self._io_loop = io_loop or tornado.ioloop.IOLoop.instance()
+
+        # Wire ourselves up for depth frame events
+        kinect.on_depth_frame.connect(self._on_depth_frame, sender=kinect)
 
     def _on_depth_frame(self, kinect, depth_frame):
         d = np.frombuffer(depth_frame.data, dtype=np.uint16).reshape(
@@ -48,4 +53,7 @@ class DepthFrameCompressor(object):
         d_im.save(bio, 'jpeg')
 
         compressed_frame = bio.getvalue()
-        self.on_compressed_frame.send(self, compressed_frame=compressed_frame)
+        self._io_loop.add_callback(
+            self.on_compressed_frame.send,
+            self, compressed_frame=compressed_frame
+        )
