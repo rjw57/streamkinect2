@@ -4,9 +4,7 @@ import time
 from streamkinect2.mock import MockKinect
 from streamkinect2.compress import DepthFrameCompressor
 
-def main():
-    wait_time = 5
-
+def benchmark_compressed(wait_time):
     print('Running compressed pipeline for {0} seconds...'.format(wait_time))
     packets = []
     with MockKinect() as kinect:
@@ -24,6 +22,7 @@ def main():
     print('Mock kinect runs at {0:.2f} packets/second w/ compression'.format(pps))
     print('Data rate is {0:2f} Mbytes/second'.format(data_rate / (1024*1024)))
 
+def benchmark_mock(wait_time):
     print('Running mock kinect for {0} seconds...'.format(wait_time))
     state = { 'n_frames': 0 }
     with MockKinect() as kinect:
@@ -36,6 +35,11 @@ def main():
     delta = now - then
     fps = state['n_frames'] / delta
     print('Mock kinect runs at {0:.2f} frames/second'.format(fps))
+
+def main():
+    wait_time = 5
+    benchmark_compressed(wait_time)
+    benchmark_mock(wait_time)
 
 if __name__ == '__main__':
     main()
