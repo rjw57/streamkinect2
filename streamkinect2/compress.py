@@ -13,6 +13,16 @@ from PIL import Image
 
 class DepthFrameCompressor(object):
     """
+    Asynchronous compression pipeline for depth frames.
+
+    *kinect* is a :py:class:`streamkinect2.mock.MockKinect`-like object. Depth
+    frames emitted by :py:meth:`on_depth_frame` will be compressed with
+    frame-drop if the compressor becomes overloaded.
+
+    If *io_loop* is provided, it specifies the
+    :py:class:`tornado.ioloop.IOLoop` which is used to co-ordinate the worker
+    process. If not provided, the global instance is used.
+
     .. py:attribute:: kinect
 
         Kinect object associated with this compressor.
@@ -23,7 +33,7 @@ class DepthFrameCompressor(object):
     a single keyword argument, *compressed_frame*, which is a Python
     buffer-like object containing the compressed frame data."""
 
-    def __init__(self, kinect):
+    def __init__(self, kinect, io_loop=None):
         kinect.on_depth_frame.connect(self._on_depth_frame, sender=kinect)
         self.kinect = kinect
         self.last_frame = None
