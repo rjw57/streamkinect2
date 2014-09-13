@@ -3,13 +3,17 @@ Depth frame compression
 =======================
 
 """
+from logging import getLogger
 from io import BytesIO
+from multiprocessing.pool import Pool
 
 from blinker import Signal
 import lz4
 import numpy as np
 from PIL import Image
 import tornado.ioloop
+
+log = getLogger(__name__)
 
 class DepthFrameCompressor(object):
     """
@@ -31,7 +35,12 @@ class DepthFrameCompressor(object):
     on_compressed_frame = Signal()
     """Signal emitted when a new compressed frame is available. Receivers take
     a single keyword argument, *compressed_frame*, which is a Python
-    buffer-like object containing the compressed frame data."""
+    buffer-like object containing the compressed frame data. The signal is
+    emitted on the IOLoop thread."""
+
+    # The maximum number of frames we can be waiting for before we start
+    # dropping them.
+    _MAX_IN_FLIGHT = 2
 
     def __init__(self, kinect, io_loop=None):
         # Public attributes
@@ -39,11 +48,14 @@ class DepthFrameCompressor(object):
 
         # Private attributes
         self._io_loop = io_loop or tornado.ioloop.IOLoop.instance()
+        self._pool = Pool(1) # worker process pool
+        self._n_in_flight = 0 # How many frames are we waiting for?
 
         # Wire ourselves up for depth frame events
         kinect.on_depth_frame.connect(self._on_depth_frame, sender=kinect)
 
-    def _on_depth_frame(self, kinect, depth_frame):
+    @classmethod
+    def _compress_depth_frame(cls, depth_frame):
         d = np.frombuffer(depth_frame.data, dtype=np.uint16).reshape(
                 depth_frame.shape[::-1], order='C')
         d = (d>>4).astype(np.uint8)
@@ -52,8 +64,33 @@ class DepthFrameCompressor(object):
         bio = BytesIO()
         d_im.save(bio, 'jpeg')
 
-        compressed_frame = bio.getvalue()
-        self._io_loop.add_callback(
-            self.on_compressed_frame.send,
-            self, compressed_frame=compressed_frame
-        )
+        return bio.getvalue()
+
+    def _on_compressed_frame(self, compressed_frame):
+        # Record arrival of frame
+        self._n_in_flight -= 1
+
+        # Send signal
+        try:
+            self._io_loop.add_callback(
+                self.on_compressed_frame.send,
+                self, compressed_frame=compressed_frame
+            )
+        except Exception as e:
+            # HACK: Since multiprocessing *might* call this handler after the
+            # io loop has shut down (which will raise an Exception) and because
+            # there's no documented way to determine if the io loop is still
+            # alive ahead of time, we swallow exceptions here. This should
+            # happen rarely when one is rapidly starting and stopping IOLoops
+            # (such as in the test-suite!) so log it as a warning.
+            log.warn('DepthFrameCompressor swallowed {0} exception'.format(e))
+
+    def _on_depth_frame(self, kinect, depth_frame):
+        # If we aren't waiting on too many frames, submit
+        if self._n_in_flight < DepthFrameCompressor._MAX_IN_FLIGHT:
+            self._pool.apply_async(DepthFrameCompressor._compress_depth_frame,
+                    args=(depth_frame,), callback=self._on_compressed_frame)
+            self._n_in_flight += 1
+        else:
+            log.warn('Dropping depth frame')
+
