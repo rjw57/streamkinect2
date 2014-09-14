@@ -3,7 +3,6 @@ Server
 ======
 """
 from collections import namedtuple
-import json
 from logging import getLogger
 import socket
 import uuid
@@ -15,7 +14,7 @@ import zeroconf
 import zmq
 from zmq.eventloop.zmqstream import ZMQStream
 
-from .common import EndpointType
+from .common import EndpointType, MessageType, make_msg, parse_msg
 from .compress import DepthFrameCompressor
 
 # Global zeroconf object pool keyed by bind address
@@ -195,7 +194,7 @@ class Server(object):
             self._streams[key], self.endpoints[key] = self._create_and_bind_socket(type)
 
         # Listen for incoming messages
-        self._streams[EndpointType.control].on_recv(self._control_recv)
+        self._streams[EndpointType.control].on_recv_stream(self._control_recv)
 
         # Use the control endpoint's port as the port to advertise on zeroconf
         control_port = int(self.endpoints[EndpointType.control].split(':')[2])
@@ -252,14 +251,16 @@ class Server(object):
     def _handle_control(self, type, payload):
         """Handle a control message. Return a pair giving the type and payload of the response."""
 
-        if type == 'ping':
+        if type == MessageType.ping:
             log.info('Got ping from client')
-            return 'pong', None
-        elif type == 'who':
-            return 'me', self._current_me()
+            return MessageType.pong, None
+        elif type == MessageType.who:
+            return MessageType.me, self._current_me()
         else:
             log.warn('Unknown message type from client: "{0}"'.format(type))
-            return 'error', { 'message': 'Unknown message type "{0}"'.format(type) }
+            return MessageType.error, {
+                'code': 400, 'reason': 'Unknown message type "{0}"'.format(type)
+            }
 
     def _create_and_bind_socket(self, type):
         """Create and bind a socket of the specified type. Returns the ZMQStream
@@ -277,32 +278,23 @@ class Server(object):
     def __exit__(self, type, value, traceback):
         self.stop()
 
-    def _control_recv(self, msg):
-        # Read JSON message
+    def _control_recv(self, stream, msg):
+        # Read message
         try:
-            msg = json.loads((b''.join(msg)).decode('utf8'))
-        except ValueError:
-            log.warn('Server ignoring invalid control packet')
+            type, payload = parse_msg(msg)
+        except ValueError as e:
+            stream.send_multipart(make_msg(MessageType.error, {
+                'code': 400,
+                'reason': str(e),
+            }))
+            log.warn('Server received a bad message: {0}'.format(e))
             return
-
-        # Check packet has required fields
-        if 'seq' not in msg:
-            log.warn('Server ignoring control packet lacking sequence number')
-            return
-        if 'type' not in msg:
-            log.warn('Server ignoring control packet lacking type')
-            return
-
-        seq, type = msg['seq'], msg['type']
-        payload = msg['payload'] if 'payload' in msg else None
 
         # Handle control packet and receive response type and payload
         r_type, r_payload = self._handle_control(type, payload)
 
         # Send response
-        self._streams[EndpointType.control].send_json(
-            { 'seq': seq, 'type': r_type, 'payload': r_payload }
-        )
+        stream.send_multipart(make_msg(r_type, r_payload))
 
     def _on_compressed_frame(self, depth_compresser, compressed_frame):
         kinect_id = depth_compresser.kinect.unique_kinect_id

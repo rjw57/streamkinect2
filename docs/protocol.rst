@@ -32,68 +32,71 @@ Control Endpoint
 
 The "control" endpoint is a REP socket on the server which expects to be
 connected to via a REQ socket on the client. Clients initiate communication
-with a JSON-encoded object. The server will then respond with a JSON-encoded
-object. This is repeated until the client disconnects.
+by sending a ``who`` message. The server will then respond with a ``me``
+message. The client may then send other messages expecting each time a reply
+from the server. This is repeated until the client disconnects.
 
-All messages have the following form::
-
-    {
-        "seq": "<sequence number>",
-        "type": "<string describing type of message>",
-        "payload": "<optional JSON object whose schema is type dependant>"
-    }
-
-The server will copy the sequence number from the client message into its
-reply. It is expected that the sequence number will increase monotonically with
-each request/response pair but the server doesn't take note of the sequence
-number at all; it is used as a convenience to associate requests with their
-response on the client side.
+All messages are multipart messages with one or two frames. The first frame
+is a single byte which indicates the message type. The second frame, if
+present, represents a JSON encoded object which is the "payload" of the
+message.
 
 Each message type has its own semantics and payload schema. Some messages may
 only be sent by a client and some only by a server.
 
+``error`` type
+~~~~~~~~~~~~~~
+
+An ``error`` message (type 0x00) MUST only be sent by the server. The server
+MAY send an ``error`` message in reply to any incoming request. The payload
+must contain a ``reason`` field with a human-readable description of the error.
+The client MAY choose to disconnect from the server or silently ignore the
+error.
+
 ``ping`` type
 ~~~~~~~~~~~~~
 
-A ``ping`` message MUST only be sent by a client. No payload is required. The
-server MUST respond with an empty-payload message of type ``pong``.
+A ``ping`` message (type 0x01) MUST only be sent by a client. No payload is
+required. The server MUST respond with an empty-payload message of type
+``pong`` or an ``error`` message.
 
 ``pong`` type
 ~~~~~~~~~~~~~
 
-A ``pong`` message MUST only be sent by a server. It MUST do so in response to
-a ``ping``.  No payload is required.
+A ``pong`` message (type 0x02) MUST only be sent by a server. It MUST do so in
+response to a ``ping`` if no ``error`` is sent. No payload is required.
 
 ``who`` type
 ~~~~~~~~~~~~
 
-A ``who`` message MUST only be sent by a client. No payload is required. The
-server MUST respond with a ``me`` message.
+A ``who`` message (type 0x03) MUST only be sent by a client. No payload is
+required. The server MUST respond with a ``me`` message or an ``error``
+message.
 
 ``me`` type
 ~~~~~~~~~~~
 
 A ``me`` messages MUST only be sent by a server. It MUST do so in
-response to a ``who`` message. A payload MUST be present. The payload MUST be a
-JSON object including at least a ``version`` field which should be the numeral
-"1". A client MUST ignore any ``me`` message with a ``version`` field set to
-any other value.
+response to a ``who`` message if no ``error`` is sent. A payload MUST be
+present. The payload MUST be an object including at least a ``version``
+field which should be the numeric value 1. A client MUST ignore any ``me``
+message with a ``version`` field set to any other value.
 
 The payload MUST include a field named ``name`` whose value is a string
 representing a human-readable name for the server.
 
-The payload MUST include a field named ``endpoints`` whose value is a JSON
-object whose fields correspond to endpoint names and whose values correspond to
+The payload MUST include a field named ``endpoints`` whose value is an object
+whose fields correspond to endpoint names and whose values correspond to
 ZeroMQ-style endpoint addresses. The client MUST ignore any endpoints whose
 name it does not recognise. The server MAY advertise any endpoints it wishes
 but it MUST include at least a ``control`` endpoint with a ZeroMQ address
 corresponding to the control endpoint. The advertised endpoints MAY be
 non-unique and MAY have different IP addresses.
 
-The payload MUST include a field named ``devices`` whose value is a JSON array
-of device records. A device record is a JSON object. A device record MUST
-include a field named ``id`` whose value is a string giving a unique name for a
-Kinect connected to the server. A device record MUST include a field named
+The payload MUST include a field named ``devices`` whose value is an array of
+device records. A device record is a JSON object. A device record MUST include
+a field named ``id`` whose value is a string giving a unique name for a Kinect
+connected to the server. A device record MUST include a field named
 ``endpoints`` whose value takes the same format (but not necessarily the same
 value) as the ``endpoints`` object in the payload. This ``endpoints`` object
 gives endpoints which are specific to a particular device.

@@ -3,8 +3,7 @@ Client
 ======
 
 """
-from collections import namedtuple
-import json
+from collections import namedtuple, deque
 from logging import getLogger
 import functools
 
@@ -13,7 +12,8 @@ import tornado.ioloop
 import zmq
 from zmq.eventloop.zmqstream import ZMQStream
 
-from .common import EndpointType, ProtocolError
+from .common import EndpointType, ProtocolError, MessageType
+from .common import make_msg, parse_msg
 
 # Global logging object
 log = getLogger(__name__)
@@ -92,11 +92,7 @@ class Client(object):
 
         self._io_loop = io_loop
 
-        # Sequence number of all messages
-        self._sequence_number = 0
-
-        # Callables to handle responses keyed by sequence number
-        self._response_handlers = {}
+        self._response_handlers = deque()
 
         # Heartbeat callback and period
         self._heartbeat_period = heartbeat_period
@@ -120,11 +116,11 @@ class Client(object):
         """
         self._ensure_connected()
 
-        def pong(seq, type, payload, pong_cb=pong_cb):
+        def pong(type, payload, pong_cb=pong_cb):
             if pong_cb is not None:
                 pong_cb()
 
-        self._control_send('ping', recv_cb=pong)
+        self._control_send(MessageType.ping, recv_cb=pong)
 
     def enable_depth_frames(self, kinect_id):
         """Enable streaming of depth frames. *kinect_id* is the id of the
@@ -200,13 +196,13 @@ class Client(object):
 
         """
         # Handler function
-        def got_me(seq, type, payload):
-            if type != 'me':
+        def got_me(type, payload):
+            if type != MessageType.me:
                 raise ProtocolError('Expected me list but got "{0}" instead'.format(type))
 
             log.info('Received "me" from server')
 
-            if 'version' not in payload or payload['version'] != 1:
+            if payload is None or 'version' not in payload or payload['version'] != 1:
                 log.error('me had wrong or missing version')
                 raise ProtocolError('unknown server protocol')
 
@@ -278,7 +274,7 @@ class Client(object):
 
         # Send packet
         log.info('Requesting server identity')
-        self._control_send('who', recv_cb=got_me)
+        self._control_send(MessageType.who, recv_cb=got_me)
 
     def _ensure_connected(self):
         if not self.is_connected:
@@ -293,54 +289,20 @@ class Client(object):
 
     def _control_send(self, type, payload=None, recv_cb=None):
         """Send *payload* formatted as a JSON object along the control socket.
-        Takes care of adding a "seq" field to the object with an
-        auto-incremented sequence number. The message sent to the server is::
-
-            {
-                "seq":      <generated sequence number>,
-                "type":     type,
-                "payload":  payload # formatted as a JSON object
-            }
-
         If *recv_cb* is not *None*, it is a callable which is called with the
         type and Python object representing the response payload from the
-        server.
+        server. If there is no payload, None is passed.
 
         """
-        self._sequence_number += 1
-        seq = self._sequence_number
-        if recv_cb is not None:
-            self._response_handlers[seq] = recv_cb
-        msg = { 'seq': seq, 'type': type, 'payload': payload, }
-        self._control_stream.send_json(msg)
+        self._response_handlers.append(recv_cb)
+        self._control_stream.send_multipart(make_msg(type, payload))
 
     def _control_recv(self, msg):
         """Called when there is something to be received on the control socket."""
-        # Read JSON message
-        try:
-            msg = json.loads((b''.join(msg)).decode('utf8'))
-        except ValueError:
-            log.warn('Client ignoring invalid control packet')
-            return
-
-        # Check packet has required fields
-        if 'seq' not in msg:
-            log.warn('Client ignoring control packet lacking sequence number')
-            return
-        if 'type' not in msg:
-            log.warn('Client ignoring control packet lacking type')
-            return
-
-        seq, type = msg['seq'], msg['type']
-        payload = msg['payload'] if 'payload' in msg else None
+        # Parse message
+        type, payload = parse_msg(msg)
 
         # Do we have a recv handler?
-        try:
-            recv_cb = self._response_handlers[seq]
-        except KeyError:
-            # Nope, just drop it
-            return
-
-        # Call the callback
-        del self._response_handlers[seq]
-        recv_cb(seq, type, payload)
+        handler = self._response_handlers.popleft()
+        if handler is not None:
+            handler(type, payload)
