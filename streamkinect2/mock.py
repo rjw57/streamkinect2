@@ -32,7 +32,7 @@ class DepthFrame(namedtuple('DepthFrame', ('data', 'shape'))):
         Python buffer-like object pointing to raw frame data as a C-ordered
         array of uint16.
 
-    .. pt:attribute:: shape
+    .. py:attribute:: shape
 
         Pair giving the width and height of the depth frame.
 
