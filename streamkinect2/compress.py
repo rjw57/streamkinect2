@@ -5,7 +5,8 @@ Depth frame compression
 """
 from logging import getLogger
 from io import BytesIO
-from multiprocessing.pool import Pool, cpu_count
+from multiprocessing.pool import Pool
+from multiprocessing import cpu_count
 
 from blinker import Signal
 import lz4
