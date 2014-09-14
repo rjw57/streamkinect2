@@ -5,7 +5,7 @@ Depth frame compression
 """
 from logging import getLogger
 from io import BytesIO
-from multiprocessing.pool import Pool
+from multiprocessing.pool import Pool, cpu_count
 
 from blinker import Signal
 import lz4
@@ -14,6 +14,17 @@ from PIL import Image
 import tornado.ioloop
 
 log = getLogger(__name__)
+
+def _compress_depth_frame(depth_frame):
+    d = np.frombuffer(depth_frame.data, dtype=np.uint16).reshape(
+            depth_frame.shape[::-1], order='C')
+    d = (d>>4).astype(np.uint8)
+    d_im = Image.fromarray(d)
+
+    bio = BytesIO()
+    d_im.save(bio, 'jpeg')
+
+    return bio.getvalue()
 
 class DepthFrameCompressor(object):
     """
@@ -40,7 +51,7 @@ class DepthFrameCompressor(object):
 
     # The maximum number of frames we can be waiting for before we start
     # dropping them.
-    _MAX_IN_FLIGHT = 2
+    _MAX_IN_FLIGHT = cpu_count() + 1
 
     def __init__(self, kinect, io_loop=None):
         # Public attributes
@@ -48,8 +59,9 @@ class DepthFrameCompressor(object):
 
         # Private attributes
         self._io_loop = io_loop or tornado.ioloop.IOLoop.instance()
-        self._pool = Pool(1) # worker process pool
+        self._pool = Pool() # worker process pool
         self._n_in_flight = 0 # How many frames are we waiting for?
+        self._n_dropped = 0
 
         # Wire ourselves up for depth frame events
         kinect.on_depth_frame.connect(self._on_depth_frame, sender=kinect)
@@ -58,18 +70,6 @@ class DepthFrameCompressor(object):
         # As a courtesy, terminate the worker pool to avoid having a sea of
         # dangling processes.
         self._pool.terminate()
-
-    @classmethod
-    def _compress_depth_frame(cls, depth_frame):
-        d = np.frombuffer(depth_frame.data, dtype=np.uint16).reshape(
-                depth_frame.shape[::-1], order='C')
-        d = (d>>4).astype(np.uint8)
-        d_im = Image.fromarray(d)
-
-        bio = BytesIO()
-        d_im.save(bio, 'jpeg')
-
-        return bio.getvalue()
 
     def _on_compressed_frame(self, compressed_frame):
         # Record arrival of frame
@@ -93,9 +93,12 @@ class DepthFrameCompressor(object):
     def _on_depth_frame(self, kinect, depth_frame):
         # If we aren't waiting on too many frames, submit
         if self._n_in_flight < DepthFrameCompressor._MAX_IN_FLIGHT:
-            self._pool.apply_async(DepthFrameCompressor._compress_depth_frame,
+            self._pool.apply_async(_compress_depth_frame,
                     args=(depth_frame,), callback=self._on_compressed_frame)
             self._n_in_flight += 1
         else:
-            log.warn('Dropping depth frame')
+            # Only log every 10 dropped frames to avoid being too spammy
+            self._n_dropped += 1
+            if self._n_dropped % 10 == 0:
+                log.warn('Dropped {0} depth frames'.format(self._n_dropped))
 
