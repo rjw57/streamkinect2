@@ -107,9 +107,9 @@ class Server(object):
             name = 'Kinect {0}'.format(uuid.uuid4())
 
         # Get a zeroconf instance appropriate to the bind address
-        self._zc = _get_zeroconf(address)
         if address is None:
-            address = self._zc.intf # Is this a private attribute?
+            address = '0.0.0.0' # By default bind to localhost
+        self._zc = _get_zeroconf(address)
 
         # Set public attributes
         self.is_running = False
@@ -120,11 +120,11 @@ class Server(object):
         self._announce = announce
 
         # If we announce over zero conf then we can use '.local' addressing.
-        # Otherwise, fall back to the hostname.
+        # Otherwise, fall back to the specified address.
         if self._announce:
             self._server_address = '{0}.local'.format(platform.node())
         else:
-            self._server_address = socket.getfqdn()
+            self._server_address = self.address
 
         # zmq streams for each endpoint
         self._streams = {}
@@ -375,7 +375,8 @@ class ServerBrowser(object):
             short_name = name[:-(len(_ZC_SERVICE_TYPE)+1)]
 
             zc_info = zeroconf.getServiceInfo(type, name)
-            address = zc_info.getServer()
+            # Normalise FQDNs by stripping trailing period
+            address = zc_info.getServer().rstrip('.')
             port = zc_info.getPort()
 
             # Form control endpoint address
