@@ -107,9 +107,17 @@ class Server(object):
             name = 'Kinect {0}'.format(uuid.uuid4())
 
         # Get a zeroconf instance appropriate to the bind address
+        if announce:
+            self._zc = _get_zeroconf(address)
+        else:
+            self._zc = None
+
         if address is None:
-            address = '0.0.0.0' # By default bind to localhost
-        self._zc = _get_zeroconf(address)
+            if announce:
+                address = self._zc.intf
+            else:
+                address = '0.0.0.0' # By default bind to any interface
+
 
         # Set public attributes
         self.is_running = False
@@ -124,7 +132,7 @@ class Server(object):
         if self._announce:
             self._server_address = '{0}.local'.format(platform.node())
         else:
-            self._server_address = self.address
+            self._server_address = socket.gethostbyaddr(self.address)[0]
 
         # zmq streams for each endpoint
         self._streams = {}
@@ -207,13 +215,13 @@ class Server(object):
         # Use the control endpoint's port as the port to advertise on zeroconf
         control_port = int(self.endpoints[EndpointType.control].split(':')[2])
 
-        # Create a Zeroconf service info for ourselves
-        self._zc_info = zeroconf.ServiceInfo(_ZC_SERVICE_TYPE,
-            '.'.join((self.name, _ZC_SERVICE_TYPE)),
-            address=socket.inet_aton(self.address), port=control_port,
-            properties={}, server=self._server_address)
-
         if self._announce:
+            # Create a Zeroconf service info for ourselves
+            self._zc_info = zeroconf.ServiceInfo(_ZC_SERVICE_TYPE,
+                '.'.join((self.name, _ZC_SERVICE_TYPE)),
+                address=socket.inet_aton(self._zc.intf), port=control_port,
+                properties={}, server=self._server_address)
+
             # register ourselves with zeroconf
             log.info('Registering server "{0}" with Zeroconf'.format(self.name))
             self._zc.registerService(self._zc_info)
