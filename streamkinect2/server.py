@@ -4,6 +4,7 @@ Server
 """
 from collections import namedtuple
 from logging import getLogger
+import platform
 import socket
 import uuid
 import weakref
@@ -118,6 +119,13 @@ class Server(object):
 
         self._announce = announce
 
+        # If we announce over zero conf then we can use '.local' addressing.
+        # Otherwise, fall back to the hostname.
+        if self._announce:
+            self._server_address = '{0}.local'.format(platform.node())
+        else:
+            self._server_address = socket.getfqdn()
+
         # zmq streams for each endpoint
         self._streams = {}
         self._io_loop = io_loop
@@ -203,7 +211,7 @@ class Server(object):
         self._zc_info = zeroconf.ServiceInfo(_ZC_SERVICE_TYPE,
             '.'.join((self.name, _ZC_SERVICE_TYPE)),
             address=socket.inet_aton(self.address), port=control_port,
-            properties={})
+            properties={}, server=self._server_address)
 
         if self._announce:
             # register ourselves with zeroconf
@@ -269,7 +277,7 @@ class Server(object):
         """
         socket = self._zmq_ctx.socket(type)
         port = socket.bind_to_random_port('tcp://{0}'.format(self.address))
-        return ZMQStream(socket, self._io_loop), 'tcp://{0}:{1}'.format(self.address, port)
+        return ZMQStream(socket, self._io_loop), 'tcp://{0}:{1}'.format(self._server_address, port)
 
     def __enter__(self):
         self.start()
@@ -367,7 +375,7 @@ class ServerBrowser(object):
             short_name = name[:-(len(_ZC_SERVICE_TYPE)+1)]
 
             zc_info = zeroconf.getServiceInfo(type, name)
-            address = socket.inet_ntoa(zc_info.getAddress())
+            address = zc_info.getServer()
             port = zc_info.getPort()
 
             # Form control endpoint address
