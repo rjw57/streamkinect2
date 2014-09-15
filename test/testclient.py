@@ -61,6 +61,7 @@ class TestBasicClient(AsyncTestCase):
 
         # Start the client. Use a fast heartbeat to make testing quick
         control_endpoint = self.server.endpoints[EndpointType.control]
+        log.info('Started server with control endpoint: {0}'.format(control_endpoint))
         self.client = Client(control_endpoint,
                 connect_immediately=True, io_loop=self.io_loop,
                 heartbeat_period=250)
@@ -73,6 +74,8 @@ class TestBasicClient(AsyncTestCase):
 
     def test_control_endpoint(self):
         control_endpoint = self.server.endpoints[EndpointType.control]
+        log.info('Testing client control endpoint {0} matches server endpoint {1}'.format(
+            self.client.endpoints[EndpointType.control], control_endpoint))
         assert self.client.endpoints[EndpointType.control] == control_endpoint
 
     def test_device_before_connect(self):
