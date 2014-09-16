@@ -22,6 +22,7 @@ class Benchmark(object):
     def __init__(self, io_loop=None):
         self.io_loop = io_loop or IOLoop.instance()
         self.records = {}
+        self.client_kinects = {}
         self.report_callback = PeriodicCallback(self._report, 1000, self.io_loop)
         self.report_callback.start()
 
@@ -35,13 +36,35 @@ class Benchmark(object):
         client.enable_depth_frames(kinect_id)
 
         self.records[kinect_id] = { 'start': time.time(), 'count': 0, }
+        self.client_kinects[client].add(kinect_id)
+
+    def on_remove_kinect(self, client, kinect_id):
+        log.info('Kinect {0} went away'.format(kinect_id))
+        self.client_kinects[client].remove(kinect_id)
+        del self.records[kinect_id]
 
     def new_client(self, client, io_loop):
         """Called when a new client has been created. Enable depth streaming on all
         devices and benchmark result."""
 
+        self.client_kinects[client] = set()
+
         # Register interest in devices
         client.on_add_kinect.connect(self.on_add_kinect, sender=client)
+        client.on_remove_kinect.connect(self.on_remove_kinect, sender=client)
+
+    def removed_client(self, client, io_loop):
+        """Called when a new client has been created. Enable depth streaming on all
+        devices and benchmark result."""
+
+        for kin_id in self.client_kinects[client]:
+            del self.records[kin_id]
+
+        del self.client_kinects[client]
+
+        # Register disinterest in devices
+        client.on_add_kinect.disconnect(self.on_add_kinect, sender=client)
+        client.on_remove_kinect.disconnect(self.on_remove_kinect, sender=client)
 
     def _report(self):
         now = time.time()
@@ -69,18 +92,22 @@ class Listener(object):
     def add_server(self, browser, server_info):
         log.info('Discovered server "{0.name}" at "{0.endpoint}"'.format(server_info))
         client = Client(server_info.endpoint, connect_immediately=True)
-        self.clients[server_info.endpoint] = client
+        @client.on_disconnect.connect_via(client)
+        def on_disconnect(_client, server_info=server_info, browser=browser):
+            self.remove_server(browser, server_info)
+        self.clients[server_info.name] = client
         self.benchmark.new_client(client, self.io_loop)
 
     def remove_server(self, browser, server_info):
         log.info('Server "{0.name}" at "{0.endpoint}" went away'.format(server_info))
         try:
-            client = self.clients[server_info.endpoint]
+            client = self.clients[server_info.name]
         except KeyError:
             # We didn't have a client for this server
             return
+        self.benchmark.removed_client(client, self.io_loop)
         client.disconnect()
-        del self.clients[server_info.endpoint]
+        del self.clients[server_info.name]
 
 class IOLoopThread(threading.Thread):
     def run(self):
