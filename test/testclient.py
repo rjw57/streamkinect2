@@ -102,9 +102,13 @@ class TestBasicClient(AsyncTestCase):
         # Start the client. Use a fast heartbeat to make testing quick
         control_endpoint = self.server.endpoints[EndpointType.control]
         log.info('Started server with control endpoint: {0}'.format(control_endpoint))
-        self.client = Client(control_endpoint,
-                connect_immediately=True, io_loop=self.io_loop,
-                heartbeat_period=250)
+        self.client = Client(control_endpoint, io_loop=self.io_loop)
+
+        # Increase heartbeat frequency to make tests quicker
+        self.client.heartbeat_period = 100
+
+        # Connect client
+        self.client.connect()
 
     def tearDown(self):
         super(TestBasicClient, self).tearDown()

@@ -42,9 +42,6 @@ class Client(object):
     If *connect_immediately* is *True* then the client attempts to connect when
     constructed. If *False* then :py:meth:`connect` must be used explicitly.
 
-    *heartbeat_period* is the delay, in milliseconds, between "heartbeat"
-    requests to the server. These are used to ensure the server is still alive.
-
     .. py:attribute:: server_name
 
         A string giving a human-readable name for the server or *None* if the
@@ -58,6 +55,25 @@ class Client(object):
     .. py:attribute:: is_connected
 
         *True* if the client is connected. *False* otherwise.
+
+    The following attributes are mostly of use to the unit tests and advanced
+    users.
+
+    .. py:attribute:: heartbeat_period
+
+        The delay, in milliseconds, between "heartbeat" requests to the server.
+        These are used to ensure the server is still alive. Changes to this
+        attribute are ignored once :py:meth:`connect` has been called.
+
+    .. py:attribute:: request_timeout
+
+        The maximum wait time, in milliseconds, the client waits for the server
+        to reply before either retrying or giving up.
+
+    .. py:attribute:: request_max_retries
+
+        The maximum number of times a request will be made before the client
+        gives up and disconnects from the server.
 
     """
 
@@ -84,13 +100,17 @@ class Client(object):
     *kinect_id* which will be the unique id of the kinect device producing the
     depth frame."""
 
-    def __init__(self, control_endpoint, connect_immediately=False, zmq_ctx=None, io_loop=None,
-            heartbeat_period=10000):
+    def __init__(self, control_endpoint, connect_immediately=False, zmq_ctx=None, io_loop=None):
         self.is_connected = False
         self.server_name = None
         self.endpoints = {
             EndpointType.control: control_endpoint
         }
+
+        # Default values for timeouts, periods, etc
+        self.heartbeat_period = 10000
+        self.request_timeout = 500
+        self.request_max_retries = 3
 
         if zmq_ctx is None:
             zmq_ctx = zmq.Context.instance()
@@ -100,8 +120,7 @@ class Client(object):
 
         self._response_handlers = deque()
 
-        # Heartbeat callback and period
-        self._heartbeat_period = heartbeat_period
+        # Heartbeat callback
         self._heartbeat_callback = None
 
         # Dictionary of device records keyed by id
@@ -176,7 +195,7 @@ class Client(object):
 
         # Create and start the heartbeat callbacl
         self._heartbeat_callback = tornado.ioloop.PeriodicCallback(
-                self._who_me, self._heartbeat_period, self._io_loop)
+                self._who_me, self.heartbeat_period, self._io_loop)
         self._heartbeat_callback.start()
 
         # Finally, signal connection
