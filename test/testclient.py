@@ -51,6 +51,46 @@ class TestClientConnection(AsyncTestCase):
         client.disconnect()
         assert not client.is_connected
 
+    def test_explicit_connect_sends_events(self):
+        state = { 'on_connect': 0 }
+
+        client = Client(self.endpoint, io_loop=self.io_loop)
+
+        @client.on_connect.connect_via(client)
+        def on_connect_called(sender):
+            assert sender is client
+            state['on_connect'] += 1
+
+        assert state['on_connect'] == 0
+        client.connect()
+
+        self.keep_checking(lambda: state['on_connect'] != 0)
+        self.wait()
+        assert state['on_connect'] == 1
+
+        client.disconnect()
+        assert not client.is_connected
+
+    def test_explicit_disconnect_sends_events(self):
+        state = { 'on_disconnect': 0 }
+
+        client = Client(self.endpoint, io_loop=self.io_loop)
+
+        @client.on_disconnect.connect_via(client)
+        def on_disconnect_called(sender):
+            assert sender is client
+            state['on_disconnect'] += 1
+
+        assert state['on_disconnect'] == 0
+        client.connect()
+        self.keep_checking(lambda: client.is_connected)
+        self.wait()
+
+        client.disconnect()
+        self.keep_checking(lambda: state['on_disconnect'] != 0)
+        self.wait()
+        assert state['on_disconnect'] == 1
+
 class TestBasicClient(AsyncTestCase):
     def setUp(self):
         super(TestBasicClient, self).setUp()

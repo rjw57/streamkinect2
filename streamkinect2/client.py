@@ -61,6 +61,12 @@ class Client(object):
 
     """
 
+    on_connect = Signal()
+    """A signal which is emitted when the client connects to a server."""
+
+    on_disconnect = Signal()
+    """A signal which is emitted when the client disconnects from a server."""
+
     on_add_kinect = Signal()
     """A signal which is emitted when a new kinect device is available. Handlers
     should accept a single keyword argument *kinect_id* which is the unique id
@@ -173,6 +179,9 @@ class Client(object):
                 self._who_me, self._heartbeat_period, self._io_loop)
         self._heartbeat_callback.start()
 
+        # Finally, signal connection
+        self.on_connect.send(self)
+
     def disconnect(self):
         """Explicitly disconnect the client."""
         if not self.is_connected:
@@ -188,6 +197,9 @@ class Client(object):
         self._control_stream = None
 
         self.is_connected = False
+
+        # Finally, signal disconnection
+        self.on_disconnect.send(self)
 
     _KinectRecord = namedtuple('_KinectRecord', ['endpoints', 'streams'])
 
