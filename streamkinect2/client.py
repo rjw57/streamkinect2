@@ -116,7 +116,7 @@ class Client(object):
             zmq_ctx = zmq.Context.instance()
         self._zmq_ctx = zmq_ctx
 
-        self._io_loop = io_loop
+        self._io_loop = io_loop or tornado.ioloop.IOLoop.instance()
 
         self._response_handlers = deque()
 
