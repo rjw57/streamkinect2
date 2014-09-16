@@ -25,7 +25,8 @@ class TestClientConnection(AsyncTestCase):
 
     def tearDown(self):
         super(TestClientConnection, self).tearDown()
-        self.server.stop()
+        if self.server.is_running:
+            self.server.stop()
 
     @raises(RuntimeError)
     def test_client_must_be_connected(self):
@@ -113,8 +114,10 @@ class TestBasicClient(AsyncTestCase):
     def tearDown(self):
         super(TestBasicClient, self).tearDown()
 
-        self.client.disconnect()
-        self.server.stop()
+        if self.client.is_connected:
+            self.client.disconnect()
+        if self.server.is_running:
+            self.server.stop()
 
     def test_control_endpoint(self):
         control_endpoint = self.server.endpoints[EndpointType.control]
@@ -189,6 +192,16 @@ class TestBasicClient(AsyncTestCase):
             self.client.ping(pong)
 
         self.keep_checking(lambda: state['n_pongs'] == state['n_pings'])
+        self.wait()
+
+    def test_client_disconnects_when_server_disappears(self):
+        assert self.client.is_connected
+
+        # Stop server
+        self.server.stop()
+
+        # Client should eventually disconnect
+        self.keep_checking(lambda: not self.client.is_connected)
         self.wait()
 
     @raises(ValueError)

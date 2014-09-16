@@ -70,7 +70,7 @@ class Client(object):
         The maximum wait time, in milliseconds, the client waits for the server
         to reply before either retrying or giving up.
 
-    .. py:attribute:: request_max_retries
+    .. py:attribute:: request_max_tries
 
         The maximum number of times a request will be made before the client
         gives up and disconnects from the server.
@@ -110,7 +110,7 @@ class Client(object):
         # Default values for timeouts, periods, etc
         self.heartbeat_period = 10000
         self.request_timeout = 500
-        self.request_max_retries = 3
+        self.request_max_tries = 3
 
         if zmq_ctx is None:
             zmq_ctx = zmq.Context.instance()
@@ -125,6 +125,18 @@ class Client(object):
 
         # Dictionary of device records keyed by id
         self._kinect_records = {}
+
+        # ZMQStream for control socket
+        self._control_stream = None
+
+        # Opaque handle for current request timeout(s)
+        self._request_timeout_handles = deque()
+
+        # List of messages waiting to be sent as (type, payload) pairs
+        self._request_message_queue = deque()
+
+        # How many tries do we have?
+        self._request_tries_left = self.request_max_tries
 
         if connect_immediately:
             self.connect()
@@ -182,11 +194,12 @@ class Client(object):
             return
 
         # Create, connect and wire up control socket listener
-        control_endpoint = self.endpoints[EndpointType.control]
-        control_socket = self._zmq_ctx.socket(zmq.REQ)
-        control_socket.connect(control_endpoint)
-        self._control_stream = ZMQStream(control_socket, self._io_loop)
-        self._control_stream.on_recv(self._control_recv)
+        self._connect_control_endpoint()
+
+        # Reset request re-try queues
+        self._request_timeout_handles = deque()
+        self._request_message_queue = deque()
+        self._request_tries_left = self.request_max_tries
 
         self.is_connected = True
 
@@ -206,6 +219,14 @@ class Client(object):
         if not self.is_connected:
             log.warn('Client not connected')
             return
+
+        # Cancel timeouts for any in-flight requests
+        for timeout in self._request_timeout_handles:
+            self._io_loop.remove_timeout(timeout)
+        self._request_timeout_handles = deque()
+
+        # Clear message queue
+        self._request_message_queue = deque()
 
         # Stop heartbeat callback
         if self._heartbeat_callback is not None:
@@ -318,6 +339,19 @@ class Client(object):
     def __exit__(self, type, value, traceback):
         self.disconnect()
 
+    def _connect_control_endpoint(self):
+        control_endpoint = self.endpoints[EndpointType.control]
+
+        # Disconnect any existing socket (or, rather, let GC do it)
+        if self._control_stream is not None:
+            self._control_stream = None
+
+        # Create, connect and wire up control socket listener
+        control_socket = self._zmq_ctx.socket(zmq.REQ)
+        control_socket.connect(control_endpoint)
+        self._control_stream = ZMQStream(control_socket, self._io_loop)
+        self._control_stream.on_recv(self._control_recv)
+
     def _control_send(self, type, payload=None, recv_cb=None):
         """Send *payload* formatted as a JSON object along the control socket.
         If *recv_cb* is not *None*, it is a callable which is called with the
@@ -325,11 +359,33 @@ class Client(object):
         server. If there is no payload, None is passed.
 
         """
+        # Record this message in the request message queue and add a request timeout
+        self._request_message_queue.append((type, payload))
+        self._request_timeout_handles.append(self._io_loop.call_later(
+            self.request_timeout * 1e-3, self._request_timedout))
+
+        # Add the response handler and send the message
         self._response_handlers.append(recv_cb)
         self._control_stream.send_multipart(make_msg(type, payload))
 
     def _control_recv(self, msg):
         """Called when there is something to be received on the control socket."""
+        # If we're disconnected, then something has gone horribly wrong
+        if not self.is_connected:
+            return
+
+        # Pop and cancel request timeout
+        try:
+            self._io_loop.remove_timeout(self._request_timeout_handles.popleft())
+        except IndexError:
+            pass
+
+        # Pop request message
+        self._request_message_queue.popleft()
+
+        # Reset re-try count
+        self._request_tries_left = self.request_max_tries
+
         # Parse message
         type, payload = parse_msg(msg)
 
@@ -337,3 +393,30 @@ class Client(object):
         handler = self._response_handlers.popleft()
         if handler is not None:
             handler(type, payload)
+
+    def _request_timedout(self):
+        """Called when there was a timeout sending the request."""
+        self._request_tries_left -= 1
+        if self._request_tries_left == 0:
+            log.error('Request to server timed out and we ran out of re-tries: disconnecting')
+            self.disconnect()
+            return
+
+        log.warn('Request to server timed out, tries remaining: {0}'.format(self._request_tries_left))
+
+        # Disconnect and re-connect to server
+        self._connect_control_endpoint()
+
+        # Pop this timeout
+        try:
+            self._request_timeout_handles.popleft()
+        except IndexError:
+            pass
+
+        # Re-add timeout
+        self._request_timeout_handles.appendleft(self._io_loop.call_later(
+            self.request_timeout * 1e-3, self._request_timedout))
+
+        # Re-submit messages in queue
+        for type, payload in self._request_message_queue:
+            self._control_stream.send_multipart(make_msg(type, payload))
