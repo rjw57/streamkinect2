@@ -92,6 +92,25 @@ class TestClientConnection(AsyncTestCase):
         self.wait()
         assert state['on_disconnect'] == 1
 
+    def test_client_disconnects_when_server_disappears(self):
+        client = Client(self.endpoint, io_loop=self.io_loop)
+
+        assert not client.is_connected
+        client.heartbeat_period = 200
+        client.response_timeout = 500
+        client.connect()
+
+        # Wait for server identity
+        self.keep_checking(lambda: client.server_name is not None)
+        self.wait()
+
+        # Stop server
+        self.server.stop()
+
+        # Client should eventually disconnect
+        self.keep_checking(lambda: not client.is_connected)
+        self.wait()
+
 class TestBasicClient(AsyncTestCase):
     def setUp(self):
         super(TestBasicClient, self).setUp()
@@ -192,16 +211,6 @@ class TestBasicClient(AsyncTestCase):
             self.client.ping(pong)
 
         self.keep_checking(lambda: state['n_pongs'] == state['n_pings'])
-        self.wait()
-
-    def test_client_disconnects_when_server_disappears(self):
-        assert self.client.is_connected
-
-        # Stop server
-        self.server.stop()
-
-        # Client should eventually disconnect
-        self.keep_checking(lambda: not self.client.is_connected)
         self.wait()
 
     @raises(ValueError)
