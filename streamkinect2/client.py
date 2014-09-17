@@ -104,7 +104,7 @@ class Client(object):
 
         # Default values for timeouts, periods, etc
         self.heartbeat_period = 10000
-        self.response_timeout = 500
+        self.response_timeout = 5000
 
         if zmq_ctx is None:
             zmq_ctx = zmq.Context.instance()
