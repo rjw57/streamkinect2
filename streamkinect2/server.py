@@ -379,10 +379,14 @@ class ServerBrowser(object):
                 return  # pragma: no cover
             assert name.endswith('.' + _ZC_SERVICE_TYPE)
 
+            zc_info = zeroconf.getServiceInfo(type, name)
+            if zc_info is None:
+                # Service went away
+                return
+
             log.info('Service discovered: {0}'.format(name))
             short_name = name[:-(len(_ZC_SERVICE_TYPE)+1)]
 
-            zc_info = zeroconf.getServiceInfo(type, name)
             # Normalise FQDNs by stripping trailing period
             address = zc_info.getServer().rstrip('.')
             port = zc_info.getPort()
