@@ -65,15 +65,10 @@ class Client(object):
         These are used to ensure the server is still alive. Changes to this
         attribute are ignored once :py:meth:`connect` has been called.
 
-    .. py:attribute:: request_timeout
+    .. py:attribute:: response_timeout
 
         The maximum wait time, in milliseconds, the client waits for the server
-        to reply before either retrying or giving up.
-
-    .. py:attribute:: request_max_tries
-
-        The maximum number of times a request will be made before the client
-        gives up and disconnects from the server.
+        to reply before giving up.
 
     """
 
@@ -109,8 +104,7 @@ class Client(object):
 
         # Default values for timeouts, periods, etc
         self.heartbeat_period = 10000
-        self.request_timeout = 500
-        self.request_max_tries = 3
+        self.response_timeout = 500
 
         if zmq_ctx is None:
             zmq_ctx = zmq.Context.instance()
@@ -129,14 +123,8 @@ class Client(object):
         # ZMQStream for control socket
         self._control_stream = None
 
-        # Opaque handle for current request timeout(s)
-        self._request_timeout_handles = deque()
-
-        # List of messages waiting to be sent as (type, payload) pairs
-        self._request_message_queue = deque()
-
-        # How many tries do we have?
-        self._request_tries_left = self.request_max_tries
+        # Handle to timeout when waiting for a response
+        self._response_timeout_handle = None
 
         if connect_immediately:
             self.connect()
@@ -196,10 +184,8 @@ class Client(object):
         # Create, connect and wire up control socket listener
         self._connect_control_endpoint()
 
-        # Reset request re-try queues
-        self._request_timeout_handles = deque()
-        self._request_message_queue = deque()
-        self._request_tries_left = self.request_max_tries
+        # We should not have any pending response timeouts
+        assert self._response_timeout_handle is None
 
         self.is_connected = True
 
@@ -220,13 +206,9 @@ class Client(object):
             log.warn('Client not connected')
             return
 
-        # Cancel timeouts for any in-flight requests
-        for timeout in self._request_timeout_handles:
-            self._io_loop.remove_timeout(timeout)
-        self._request_timeout_handles = deque()
-
-        # Clear message queue
-        self._request_message_queue = deque()
+        # Cancel any pending response timeout
+        if self._response_timeout_handle is not None:
+            self._io_loop.remove_timeout(self._response_timeout_handle)
 
         # Stop heartbeat callback
         if self._heartbeat_callback is not None:
@@ -359,10 +341,10 @@ class Client(object):
         server. If there is no payload, None is passed.
 
         """
-        # Record this message in the request message queue and add a request timeout
-        self._request_message_queue.append((type, payload))
-        self._request_timeout_handles.append(self._io_loop.call_later(
-            self.request_timeout * 1e-3, self._request_timedout))
+        # (Re-)set response timeout
+        if self._response_timeout_handle is not None:
+            self._io_loop.remove_timeout(self._response_timeout_handle)
+        self._io_loop.call_later(self.response_timeout * 1e-3, self._response_timed_out)
 
         # Add the response handler and send the message
         self._response_handlers.append(recv_cb)
@@ -370,21 +352,9 @@ class Client(object):
 
     def _control_recv(self, msg):
         """Called when there is something to be received on the control socket."""
-        # If we're disconnected, then something has gone horribly wrong
+        # If we're disconnected, then just drop the incoming packet.
         if not self.is_connected:
             return
-
-        # Pop and cancel request timeout
-        try:
-            self._io_loop.remove_timeout(self._request_timeout_handles.popleft())
-        except IndexError:
-            pass
-
-        # Pop request message
-        self._request_message_queue.popleft()
-
-        # Reset re-try count
-        self._request_tries_left = self.request_max_tries
 
         # Parse message
         type, payload = parse_msg(msg)
@@ -394,29 +364,11 @@ class Client(object):
         if handler is not None:
             handler(type, payload)
 
-    def _request_timedout(self):
-        """Called when there was a timeout sending the request."""
-        self._request_tries_left -= 1
-        if self._request_tries_left == 0:
-            log.error('Request to server timed out and we ran out of re-tries: disconnecting')
-            self.disconnect()
+    def _response_timed_out(self):
+        """Called when the response timeout fires."""
+        # Do nothing if already disconnected or if there are no pending requests
+        if not self.is_connected or len(self._response_handlers) == 0:
             return
 
-        log.warn('Request to server timed out, tries remaining: {0}'.format(self._request_tries_left))
-
-        # Disconnect and re-connect to server
-        self._connect_control_endpoint()
-
-        # Pop this timeout
-        try:
-            self._request_timeout_handles.popleft()
-        except IndexError:
-            pass
-
-        # Re-add timeout
-        self._request_timeout_handles.appendleft(self._io_loop.call_later(
-            self.request_timeout * 1e-3, self._request_timedout))
-
-        # Re-submit messages in queue
-        for type, payload in self._request_message_queue:
-            self._control_stream.send_multipart(make_msg(type, payload))
+        log.error('Client timed out while waiting for server response')
+        self.disconnect()
