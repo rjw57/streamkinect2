@@ -11,21 +11,25 @@ from multiprocessing import cpu_count
 from blinker import Signal
 import lz4
 import numpy as np
-from PIL import Image
 import tornado.ioloop
 
 log = getLogger(__name__)
 
 def _compress_depth_frame(depth_frame):
-    d = np.frombuffer(depth_frame.data, dtype=np.uint16).reshape(
-            depth_frame.shape[::-1], order='C')
-    d = (d>>4).astype(np.uint8)
-    d_im = Image.fromarray(d)
+    try:
+        d = np.frombuffer(depth_frame.data, dtype=np.uint16).reshape(
+                depth_frame.shape[::-1], order='C')
+        high_bits = ((d >> 4) & 0xff).astype(np.uint8)
+        low_bits = (d & 0xf).astype(np.uint8)
+        packed_low_bits = (low_bits[:,0::2]<<4) | low_bits[:,1::2]
 
-    bio = BytesIO()
-    d_im.save(bio, 'jpeg')
-
-    return bio.getvalue()
+        bio = BytesIO()
+        bio.write(np.asarray(high_bits, order='C').data)
+        bio.write(np.asarray(packed_low_bits, order='C').data)
+        return lz4.dumps(bio.getvalue())
+    except Exception as e:
+        print('Error: {0}'.format(e))
+        return None
 
 class DepthFrameCompressor(object):
     """
