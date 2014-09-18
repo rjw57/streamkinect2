@@ -114,5 +114,5 @@ class MockKinect(threading.Thread):
             self.on_depth_frame.send(self, depth_frame=depth_frame)
             now = time.time()
 
-            # HACK: aim for just above 60FPS
-            time.sleep(max(0, (1.0/70.0) - (now-then)))
+            # HACK: aim for just above 30FPS
+            time.sleep(max(0, (1.0/35.0) - (now-then)))
