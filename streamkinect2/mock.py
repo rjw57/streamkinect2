@@ -77,7 +77,7 @@ class MockKinect(threading.Thread):
         # Invent unique id
         self.unique_kinect_id = uuid.uuid4().hex
 
-        self._frame_shape = (1080, 1920)
+        self._frame_shape = (424, 512)
         self._wall, self._sphere = _make_mock(self._frame_shape)
 
         self._should_stop = False
