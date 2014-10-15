@@ -192,7 +192,7 @@ class Client(object):
         # Kick off an initial "who-me" request
         self._who_me()
 
-        # Create and start the heartbeat callbacl
+        # Create and start the heartbeat callback
         self._heartbeat_callback = tornado.ioloop.PeriodicCallback(
                 self._who_me, self.heartbeat_period, self._io_loop)
         self._heartbeat_callback.start()
