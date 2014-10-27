@@ -4,12 +4,17 @@ Simple benchmark of how fast depth frames are delivered.
 
 """
 import logging
+import struct
 import threading
 import time
+from PIL import Image
 
+import numpy as np
 from tornado.ioloop import IOLoop, PeriodicCallback
 from streamkinect2.server import ServerBrowser
 from streamkinect2.client import Client
+
+from lz4 import decompress, compress
 
 # Install the zmq ioloop
 from zmq.eventloop import ioloop
@@ -41,6 +46,14 @@ class Benchmark(object):
         if self.client is not client or kinect_id != self.kinect_id:
             return
         self.count += 1
+
+        orig_len, data = depth_frame
+        orig_len = np.frombuffer(orig_len, '>i4')[0]
+        fw, fh = struct.unpack('>hh', depth_frame[1][:4])
+        frame_data = np.frombuffer(depth_frame[1][4:(4+2*fw*fh)], '>i2').reshape((fh,fw))
+        #print(frame_data.shape, (fw*fh))
+        frame = Image.fromarray(frame_data.astype(np.uint8), 'L')
+        frame.save('foo.png')
 
     def _report(self):
         now = time.time()

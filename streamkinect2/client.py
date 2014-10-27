@@ -170,7 +170,7 @@ class Client(object):
         # Fire signal on incoming depth frame
         def on_recv(msg, kinect_id=kinect_id):
             # TODO: decompress frame
-            self.on_depth_frame.send(self, kinect_id=kinect_id, depth_frame=None)
+            self.on_depth_frame.send(self, kinect_id=kinect_id, depth_frame=msg)
 
         # Wire up callback
         stream.on_recv(on_recv)
